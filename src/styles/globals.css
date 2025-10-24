@@ -1,0 +1,364 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  
+  /* Modern Project Management - Teal to Aqua Gradient Palette */
+  --gradient-bg: linear-gradient(135deg, #005B73 0%, #007A8E 35%, #009CA8 70%, #00C3A0 100%);
+  --gradient-card: linear-gradient(145deg, #FFFFFF 0%, #F3F9FA 100%);
+  --gradient-primary: linear-gradient(135deg, #005B73 0%, #007A8E 50%, #009CA8 100%);
+  --gradient-secondary: linear-gradient(135deg, #00B8F4 0%, #00D4FF 100%);
+  --gradient-accent: linear-gradient(135deg, #2DF2A3 0%, #00E09C 100%);
+  --gradient-sidebar: linear-gradient(180deg, #003E4F 0%, #005B73 50%, #006E61 100%);
+  
+  /* Solid fallbacks for compatibility */
+  --background: #00C3A0;
+  --foreground: #04282f;
+  --card: #ffffff;
+  --card-foreground: #04282f;
+  --popover: #ffffff;
+  --popover-foreground: #04282f;
+  --primary: #005B73;
+  --primary-foreground: #ffffff;
+  --secondary: #00B8F4;
+  --secondary-foreground: #ffffff;
+  --muted: #C9DCE0;
+  --muted-foreground: #005B73;
+  --accent: #2DF2A3;
+  --accent-foreground: #04282f;
+  --destructive: #FF7E47;
+  --destructive-foreground: #ffffff;
+  --border: #C9DCE0;
+  --input: transparent;
+  --input-background: #F0F5F8;
+  --switch-background: #00B8F4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #00B8F4;
+  
+  /* Chart Colors */
+  --chart-1: #005B73;
+  --chart-2: #00B8F4;
+  --chart-3: #2DF2A3;
+  --chart-4: #FF7E47;
+  --chart-5: #007A8E;
+  
+  /* Border Radius */
+  --radius: 0.875rem;
+  
+  /* Sidebar Gradient Colors */
+  --sidebar: linear-gradient(180deg, #003E4F 0%, #005B73 50%, #006E61 100%);
+  --sidebar-foreground: #F0F5F8;
+  --sidebar-primary: #00B8F4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #005B73;
+  --sidebar-accent-foreground: #F0F5F8;
+  --sidebar-border: #007A8E;
+  --sidebar-ring: #00B8F4;
+  
+  /* 3D Effect Shadows - Soft Depth */
+  --shadow-3d-sm: 
+    0 2px 6px rgba(0, 91, 115, 0.12),
+    0 4px 12px rgba(0, 91, 115, 0.08);
+  
+  --shadow-3d-md: 
+    0 4px 12px rgba(0, 91, 115, 0.15),
+    0 8px 20px rgba(0, 0, 0, 0.1);
+  
+  --shadow-3d-lg: 
+    0 8px 20px rgba(0, 0, 0, 0.15),
+    0 16px 40px rgba(0, 91, 115, 0.12);
+  
+  --shadow-3d-inset: 
+    inset 0 2px 8px rgba(0, 91, 115, 0.15),
+    inset 0 4px 12px rgba(0, 0, 0, 0.1);
+    
+  /* Glassmorphism Effect */
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-blur: 10px;
+}
+
+.dark {
+  /* Dark Mode Gradient Blue-Green Palette */
+  --gradient-bg: linear-gradient(135deg, #04282f 0%, #0a5c61 50%, #0d7479 100%);
+  --gradient-card: linear-gradient(145deg, #0a5c61 0%, #085558 100%);
+  --gradient-primary: linear-gradient(135deg, #67bcc1 0%, #84babf 50%, #9dccd1 100%);
+  --gradient-secondary: linear-gradient(135deg, #0d7479 0%, #108c91 50%, #13a4a9 100%);
+  --gradient-accent: linear-gradient(135deg, #0d7479 0%, #0d8a8f 50%, #0da0a5 100%);
+  
+  --background: #04282f;
+  --foreground: #e8f5f3;
+  --card: #0a5c61;
+  --card-foreground: #e8f5f3;
+  --popover: #0a5c61;
+  --popover-foreground: #e8f5f3;
+  --primary: #84babf;
+  --primary-foreground: #04282f;
+  --secondary: #0d7479;
+  --secondary-foreground: #e8f5f3;
+  --muted: #0a5c61;
+  --muted-foreground: #9dccd1;
+  --accent: #0d7479;
+  --accent-foreground: #e8f5f3;
+  --destructive: #d4183d;
+  --destructive-foreground: #e8f5f3;
+  --border: #0d7479;
+  --input: #0a5c61;
+  --ring: #84babf;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: #84babf;
+  --chart-2: #5aacb1;
+  --chart-3: #c4dfe0;
+  --chart-4: #0d7479;
+  --chart-5: #04282f;
+  --sidebar: linear-gradient(180deg, #0a5c61 0%, #085558 100%);
+  --sidebar-foreground: #e8f5f3;
+  --sidebar-primary: #84babf;
+  --sidebar-primary-foreground: #04282f;
+  --sidebar-accent: #0d7479;
+  --sidebar-accent-foreground: #e8f5f3;
+  --sidebar-border: #085558;
+  --sidebar-ring: #84babf;
+  
+  /* Dark Mode 3D Shadows */
+  --shadow-3d-sm: 
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 4px 8px rgba(0, 0, 0, 0.2),
+    inset 0 -1px 2px rgba(132, 186, 191, 0.15),
+    inset 0 1px 2px rgba(16, 140, 145, 0.2);
+  
+  --shadow-3d-md: 
+    0 4px 8px rgba(0, 0, 0, 0.35),
+    0 8px 16px rgba(0, 0, 0, 0.25),
+    0 12px 24px rgba(0, 0, 0, 0.15),
+    inset 0 -2px 4px rgba(132, 186, 191, 0.2),
+    inset 0 2px 4px rgba(16, 140, 145, 0.25);
+  
+  --shadow-3d-lg: 
+    0 8px 16px rgba(0, 0, 0, 0.4),
+    0 16px 32px rgba(0, 0, 0, 0.3),
+    0 24px 48px rgba(0, 0, 0, 0.2),
+    inset 0 -3px 6px rgba(132, 186, 191, 0.25),
+    inset 0 3px 6px rgba(16, 140, 145, 0.3);
+  
+  --shadow-3d-inset: 
+    inset 0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    background: var(--gradient-bg);
+    background-attachment: fixed;
+    @apply text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  
+  /* Typography Classes */
+  .heading {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 700;
+  }
+  
+  .subheading {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 500;
+  }
+  
+  /* 3D Container Styles */
+  .card-3d {
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-3d-md);
+    border-radius: 24px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .card-3d::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    opacity: 0.6;
+  }
+  
+  .card-3d-sm {
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-3d-sm);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  
+  .card-3d-lg {
+    background: var(--gradient-card);
+    box-shadow: var(--shadow-3d-lg);
+    border-radius: 24px;
+    padding: 32px;
+  }
+  
+  /* Glassmorphism Card */
+  .card-glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .card-glass::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, rgba(0, 255, 200, 0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  
+  .button-3d {
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-3d-sm);
+    position: relative;
+    transition: all 0.2s ease;
+  }
+  
+  .button-3d:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-3d-md);
+  }
+  
+  .button-3d:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-3d-inset);
+  }
+  
+  .input-3d {
+    background: var(--input-background);
+    box-shadow: var(--shadow-3d-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  
+  .sidebar-3d {
+    background: var(--sidebar);
+    box-shadow: 
+      4px 0 16px rgba(0, 91, 115, 0.2),
+      2px 0 8px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
