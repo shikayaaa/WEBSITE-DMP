@@ -3,6 +3,8 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import logoImage from '../assets/dmplogofinal.png';
+
 
 interface LoginPageProps {
   onLogin: (email: string, password: string) => void;
@@ -28,19 +30,23 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       
       <Card className="w-full max-w-md card-3d-lg border-0 relative z-10">
         <CardHeader className="space-y-6 text-center">
-          <div className="mx-auto w-20 h-20 rounded-2xl flex items-center justify-center relative overflow-hidden shadow-2xl"
-               style={{background: 'linear-gradient(135deg, #005B73 0%, #00B8F4 50%, #2DF2A3 100%)'}}>
-            <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent"></div>
-            <div className="absolute inset-0 shadow-inner"></div>
-            <div className="w-10 h-10 bg-white/95 rounded-lg flex items-center justify-center relative z-10 shadow-lg">
-              <div className="w-5 h-5 rounded-md" style={{background: 'linear-gradient(135deg, #005B73 0%, #00C3A0 100%)'}}></div>
+          <div className="flex flex-col items-center gap-4">
+            {/* Logo Image */}
+            <div className="w-24 h-24 flex items-center justify-center">
+              <img 
+                src={logoImage} 
+                alt="Dumaguete Memorial Park Logo" 
+                className="w-full h-full object-contain drop-shadow-lg"
+              />
             </div>
-          </div>
-          <div>
-            <CardTitle className="text-2xl heading bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-              Dumaguete Memorial Park
-            </CardTitle>
-            <CardDescription className="subheading">Admin & Staff Panel</CardDescription>
+            
+            {/* Text Below Logo */}
+            <div className="space-y-2">
+              <CardTitle className="text-2xl heading bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+                Dumaguete Memorial Park
+              </CardTitle>
+              <CardDescription className="subheading text-base">Admin & Staff Panel</CardDescription>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

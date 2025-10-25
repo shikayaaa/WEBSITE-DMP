@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Send, Eye, FileText, DollarSign, ChevronLeft, ChevronRight, Plus, History } from 'lucide-react';
+import { Search, Filter, Eye, FileText, DollarSign, ChevronLeft, ChevronRight, Plus, History, User, MapPin, Calendar, Download } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ContractGenerator } from './ContractGenerator';
 import { PaymentHistoryModal } from './PaymentHistoryModal';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Separator } from '../ui/separator';
+import { toast } from 'sonner';
 
 export function PaymentsContracts() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,9 +20,11 @@ export function PaymentsContracts() {
   const [termFilter, setTermFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-  const [showContractGenerator, setShowContractGenerator] = useState(false);
+const [showContractGenerator, setShowContractGenerator] = useState(false);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [showContractDetails, setShowContractDetails] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<any>(null);
 
   const payments = [
     { 
@@ -80,11 +85,116 @@ export function PaymentsContracts() {
   ];
 
   const contracts = [
-    { id: 'CON-001', client: 'Maria Santos', lot: 'A-002', date: '2024-10-15', status: 'active', type: 'burial' },
-    { id: 'CON-002', client: 'Juan Cruz', lot: 'A-003', date: '2024-09-20', status: 'completed', type: 'burial' },
-    { id: 'CON-003', client: 'Pedro Garcia', lot: 'B-002', date: '2024-11-01', status: 'active', type: 'burial' },
-    { id: 'CON-004', client: 'Ana Lopez', lot: 'B-003', date: '2024-10-05', status: 'completed', type: 'burial' },
-    { id: 'CON-005', client: 'Carlos Rivera', lot: 'C-005', date: '2024-09-10', status: 'active', type: 'memorial' },
+    { 
+      id: 'CON-001', 
+      client: 'Maria Santos', 
+      lot: 'A-002', 
+      date: '2024-10-15', 
+      status: 'active', 
+      type: 'burial',
+      email: 'maria.santos@email.com',
+      phone: '+63 912 345 6789',
+      address: '123 Main St, Dumaguete City',
+      lotSize: '2m x 1m',
+      lotLocation: 'Section A, Row 2',
+      totalAmount: 45000,
+      downPayment: 15000,
+      monthlyPayment: 2500,
+      paymentTerm: '12 months',
+      amountPaid: 25000,
+      remainingBalance: 20000,
+      nextPaymentDate: '2024-12-15',
+      expiryDate: '2025-10-15',
+      terms: 'Standard burial contract with 12-month payment plan. Includes perpetual care and maintenance.'
+    },
+    { 
+      id: 'CON-002', 
+      client: 'Juan Cruz', 
+      lot: 'A-003', 
+      date: '2024-09-20', 
+      status: 'completed', 
+      type: 'burial',
+      email: 'juan.cruz@email.com',
+      phone: '+63 923 456 7890',
+      address: '456 Oak Ave, Dumaguete City',
+      lotSize: '2m x 1m',
+      lotLocation: 'Section A, Row 3',
+      totalAmount: 45000,
+      downPayment: 15000,
+      monthlyPayment: 2500,
+      paymentTerm: '12 months',
+      amountPaid: 45000,
+      remainingBalance: 0,
+      nextPaymentDate: 'N/A',
+      expiryDate: '2025-09-20',
+      terms: 'Standard burial contract with 12-month payment plan. Fully paid. Includes perpetual care and maintenance.'
+    },
+    { 
+      id: 'CON-003', 
+      client: 'Pedro Garcia', 
+      lot: 'B-002', 
+      date: '2024-11-01', 
+      status: 'active', 
+      type: 'burial',
+      email: 'pedro.garcia@email.com',
+      phone: '+63 934 567 8901',
+      address: '789 Pine Rd, Dumaguete City',
+      lotSize: '2.5m x 1.5m',
+      lotLocation: 'Section B, Row 2',
+      totalAmount: 55000,
+      downPayment: 18000,
+      monthlyPayment: 3000,
+      paymentTerm: '12 months',
+      amountPaid: 18000,
+      remainingBalance: 37000,
+      nextPaymentDate: '2024-12-01',
+      expiryDate: '2025-11-01',
+      terms: 'Premium burial contract with 12-month payment plan. Includes perpetual care and maintenance.'
+    },
+    { 
+      id: 'CON-004', 
+      client: 'Ana Lopez', 
+      lot: 'B-003', 
+      date: '2024-10-05', 
+      status: 'completed', 
+      type: 'burial',
+      email: 'ana.lopez@email.com',
+      phone: '+63 945 678 9012',
+      address: '321 Elm St, Dumaguete City',
+      lotSize: '2.5m x 1.5m',
+      lotLocation: 'Section B, Row 3',
+      totalAmount: 55000,
+      downPayment: 18000,
+      monthlyPayment: 3000,
+      paymentTerm: '12 months',
+      amountPaid: 55000,
+      remainingBalance: 0,
+      nextPaymentDate: 'N/A',
+      expiryDate: '2025-10-05',
+      terms: 'Premium burial contract with 12-month payment plan. Fully paid. Includes perpetual care and maintenance.'
+    },
+    { 
+      id: 'CON-005', 
+      client: 'Carlos Rivera', 
+      lot: 'C-005', 
+      date: '2024-09-10', 
+      status: 'active', 
+      type: 'memorial',
+      email: 'carlos.rivera@email.com',
+      phone: '+63 956 789 0123',
+      address: '654 Maple Dr, Dumaguete City',
+      lotSize: '1.5m x 1m',
+      lotLocation: 'Section C, Row 5',
+      totalAmount: 35000,
+      downPayment: 12000,
+      monthlyPayment: 2000,
+      paymentTerm: '12 months',
+      amountPaid: 16000,
+      remainingBalance: 19000,
+      nextPaymentDate: '2024-11-10',
+      expiryDate: '2025-09-10',
+      terms: 'Memorial garden contract with 12-month payment plan. Includes perpetual care and maintenance.'
+    },
   ];
 
   const installmentPlans = [
@@ -210,6 +320,17 @@ export function PaymentsContracts() {
     setShowPaymentHistory(true);
   };
 
+  const handleViewContract = (contract: any) => {
+    setSelectedContract(contract);
+    setShowContractDetails(true);
+  };
+
+  const handleDownloadContract = (contract: any) => {
+    toast.success(`Contract ${contract.id} downloaded successfully`, {
+      description: `Downloaded contract for ${contract.client}`
+    });
+  };
+
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
       case 'paid': return 'bg-green-100 text-green-800';
@@ -270,17 +391,7 @@ export function PaymentsContracts() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <FileText className="h-5 w-5 text-blue-600" />
-              <div>
-                <p className="text-sm text-muted-foreground">Active Contracts</p>
-                <p className="text-xl font-bold text-blue-600">{contracts.filter(c => c.status === 'active').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+     
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -367,14 +478,8 @@ export function PaymentsContracts() {
                           >
                             <History className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" title="View Details">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {payment.status !== 'paid' && (
-                            <Button variant="ghost" size="sm" title="Send Reminder">
-                              <Send className="h-4 w-4" />
-                            </Button>
-                          )}
+                         
+                          
                         </div>
                       </TableCell>
                     </TableRow>
@@ -427,11 +532,13 @@ export function PaymentsContracts() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewContract(contract)}
+                            title="View Contract Details"
+                          >
                             <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <FileText className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -574,6 +681,161 @@ export function PaymentsContracts() {
           paymentHistory={selectedClient.history}
         />
       )}
+
+      {/* Contract Details Modal */}
+      <Dialog open={showContractDetails} onOpenChange={setShowContractDetails}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Contract Details - {selectedContract?.id}</DialogTitle>
+            <DialogDescription>Complete contract information and terms</DialogDescription>
+          </DialogHeader>
+          {selectedContract && (
+            <div className="space-y-6">
+              {/* Client Information */}
+              <div>
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <User className="h-5 w-5 text-primary" />
+                  Client Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Client Name</p>
+                    <p className="font-medium">{selectedContract.client}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Email</p>
+                    <p className="font-medium">{selectedContract.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Phone</p>
+                    <p className="font-medium">{selectedContract.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Address</p>
+                    <p className="font-medium">{selectedContract.address}</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Lot Details */}
+              <div>
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  Lot Details
+                </h3>
+                <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Lot Number</p>
+                    <p className="font-medium">{selectedContract.lot}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Lot Size</p>
+                    <p className="font-medium">{selectedContract.lotSize}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Location</p>
+                    <p className="font-medium">{selectedContract.lotLocation}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Type</p>
+                    <p className="font-medium capitalize">{selectedContract.type}</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Contract Information */}
+              <div>
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  Contract Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contract Date</p>
+                    <p className="font-medium">{selectedContract.date}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Expiry Date</p>
+                    <p className="font-medium">{selectedContract.expiryDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Status</p>
+                    <Badge className={getContractStatusColor(selectedContract.status)}>
+                      {selectedContract.status.charAt(0).toUpperCase() + selectedContract.status.slice(1)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Next Payment Date</p>
+                    <p className="font-medium">{selectedContract.nextPaymentDate}</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Payment Information */}
+              <div>
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-primary" />
+                  Payment Information
+                </h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4 bg-muted/30 p-4 rounded-lg">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Amount</p>
+                      <p className="font-medium text-primary">₱{selectedContract.totalAmount.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Down Payment</p>
+                      <p className="font-medium">₱{selectedContract.downPayment.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Monthly Payment</p>
+                      <p className="font-medium">₱{selectedContract.monthlyPayment.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 bg-muted/30 p-4 rounded-lg">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Payment Term</p>
+                      <p className="font-medium">{selectedContract.paymentTerm}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Amount Paid</p>
+                      <p className="font-medium text-green-600">₱{selectedContract.amountPaid.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Remaining Balance</p>
+                      <p className="font-medium text-destructive">₱{selectedContract.remainingBalance.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Terms and Conditions */}
+              <div>
+                <h3 className="font-semibold mb-2">Terms and Conditions</h3>
+                <div className="bg-muted/30 p-4 rounded-lg">
+                  <p className="text-sm">{selectedContract.terms}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowContractDetails(false)}>Close</Button>
+            <Button onClick={() => selectedContract && handleDownloadContract(selectedContract)}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Contract
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

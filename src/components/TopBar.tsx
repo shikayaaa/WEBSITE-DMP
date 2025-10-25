@@ -1,7 +1,4 @@
 import React from 'react';
-import { Search } from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { NotificationsPanel } from './admin/NotificationsPanel';
 import type { User } from '../App';
@@ -23,15 +20,7 @@ export function TopBar({ user, title }: TopBarProps) {
         </h1>
       </div>
       
-      <div className="flex items-center space-x-4">
-        <div className="relative hidden md:block">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Search..."
-            className="pl-10 w-64 input-3d border-primary/20"
-          />
-        </div>
-        
+      <div className="flex items-center space-x-6">
         <NotificationsPanel />
         
         <div className="flex items-center space-x-3">

@@ -10,10 +10,12 @@ import {
   HeadphonesIcon,
   LogOut,
   ShoppingCart,
-  FileText
+  FileText,
+  Contact
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
+import logoImage from '../assets/dmplogofinal.png';
 
 interface SidebarProps {
   userRole: 'admin' | 'staff';
@@ -32,6 +34,7 @@ export function Sidebar({ userRole, currentPage, onPageChange, onLogout }: Sideb
     { id: 'deeds', label: 'Deed of Sales', icon: FileText },
     { id: 'interments', label: 'Interments & Scheduling', icon: Calendar },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+    { id: 'contacts', label: 'Contacts', icon: Contact },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -55,10 +58,13 @@ export function Sidebar({ userRole, currentPage, onPageChange, onLogout }: Sideb
       
       <div className="relative z-10 p-6 border-b border-white/10">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center relative overflow-hidden shadow-lg" 
-               style={{background: 'linear-gradient(135deg, #00B8F4 0%, #2DF2A3 100%)'}}>
-            <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent"></div>
-            <div className="w-5 h-5 bg-white rounded-sm relative z-10"></div>
+          {/* Logo Image */}
+          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+            <img 
+              src={logoImage} 
+              alt="Dumaguete Memorial Park Logo" 
+              className="w-full h-full object-contain drop-shadow-lg"
+            />
           </div>
           <div>
             <h2 className="font-semibold text-white heading">Dumaguete Memorial</h2>
