@@ -3,6 +3,10 @@ import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
 import { StaffDashboard } from './components/StaffDashboard';
 
+// ✅ Import Firebase Auth
+import { auth } from './firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+
 export interface User {
   id: string;
   name: string;
@@ -14,31 +18,34 @@ export interface User {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  const handleLogin = (email: string, password: string) => {
-    // Mock authentication - in real app this would call an API
-    if (email === 'elumirshereeanne@gmail.com' && password === 'Sheree123') {
+  // 🔹 Handle Login using Firebase Authentication
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Temporary manual role assignment (later can store in Firestore)
+      let role: 'admin' | 'staff' = 'staff';
+      if (email === 'elumirshereeanne@gmail.com') role = 'admin';
+
       setCurrentUser({
-        id: '1',
-        name: 'Sheree',
-        email: 'elumirshereeanne@gmail.com',
-        role: 'admin'
+        id: user.uid,
+        name: user.displayName || 'User',
+        email: user.email || '',
+        role,
       });
-    } else if (email === 'jeanmarieaambos@gmail.com' && password === 'jean123') {
-      setCurrentUser({
-        id: '2',
-        name: 'Jean',
-        email: 'jeanmarieaambos@gmail.com',
-        role: 'staff'
-      });
-    } else {
-      alert('Invalid credentials. Please check your email and password.');
+    } catch (error: any) {
+      alert(`Login failed: ${error.message}`);
     }
   };
 
-  const handleLogout = () => {
+  // 🔹 Handle Logout
+  const handleLogout = async () => {
+    await signOut(auth);
     setCurrentUser(null);
   };
 
+  // 🔹 Conditional Rendering
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
   }
