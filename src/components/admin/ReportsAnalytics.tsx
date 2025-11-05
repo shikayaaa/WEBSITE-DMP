@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { toast } from 'sonner';
 
 export function ReportsAnalytics() {
   const [installmentFilter, setInstallmentFilter] = useState('all');
@@ -77,7 +78,7 @@ export function ReportsAnalytics() {
   ];
 
   const handleExportPDF = () => {
-    alert('Exporting report as PDF...');
+    toast.success('Exporting report as PDF...');
   };
 
   const getActiveFiltersCount = () => {

@@ -222,11 +222,11 @@ export function AdminDashboardOverview() {
                 <AreaChart data={salesVolumeData}>
                   <defs>
                     <linearGradient id="miniSalesGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00B8F4" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#00B8F4" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <Area type="monotone" dataKey="sales" stroke="#00B8F4" strokeWidth={2} fill="url(#miniSalesGradient)" />
+                  <Area type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={2} fill="url(#miniSalesGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -272,13 +272,13 @@ export function AdminDashboardOverview() {
                 >
                   <defs>
                     <linearGradient id="visitorsBarGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0D6F73" stopOpacity={1}/>
-                      <stop offset="100%" stopColor="#0D6F73" stopOpacity={0.7}/>
+                      <stop offset="0%" stopColor="#059669" stopOpacity={1}/>
+                      <stop offset="100%" stopColor="#059669" stopOpacity={0.7}/>
                     </linearGradient>
                     
                     <linearGradient id="buyersBarGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#00B8F4" stopOpacity={1}/>
-                      <stop offset="100%" stopColor="#00B8F4" stopOpacity={0.7}/>
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={1}/>
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0.7}/>
                     </linearGradient>
                   </defs>
                   
@@ -344,16 +344,16 @@ export function AdminDashboardOverview() {
                   <PieChart>
                     <defs>
                       <linearGradient id="buyersGradient" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#0D6F73" />
-                        <stop offset="100%" stopColor="#005B73" />
+                        <stop offset="0%" stopColor="#059669" />
+                        <stop offset="100%" stopColor="#064e3b" />
                       </linearGradient>
                       <linearGradient id="newGradient" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#FF8C42" />
-                        <stop offset="100%" stopColor="#FF6B2C" />
+                        <stop offset="0%" stopColor="#ef4444" />
+                        <stop offset="100%" stopColor="#dc2626" />
                       </linearGradient>
                       <linearGradient id="otherGradient" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#00B8F4" />
-                        <stop offset="100%" stopColor="#0095C7" />
+                        <stop offset="0%" stopColor="#10b981" />
+                        <stop offset="100%" stopColor="#059669" />
                       </linearGradient>
                     </defs>
                     <Pie

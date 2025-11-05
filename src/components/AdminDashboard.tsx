@@ -10,6 +10,7 @@ import { DeedOfSales } from './admin/DeedOfSales';
 import { IntermentScheduling } from './admin/IntermentScheduling';
 import { ReportsAnalytics } from './admin/ReportsAnalytics';
 import { SettingsPage } from './admin/SettingsPage';
+import { ContactsManagement } from './admin/ContactsManagement';
 import type { User } from '../App';
 
 interface AdminDashboardProps {
@@ -30,6 +31,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       deeds: 'Deed of Sales',
       interments: 'Interments & Scheduling',
       reports: 'Reports & Analytics',
+      contacts: 'Contacts',
       settings: 'Settings'
     };
     return titles[currentPage as keyof typeof titles] || 'Dashboard';
@@ -53,6 +55,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         return <IntermentScheduling />;
       case 'reports':
         return <ReportsAnalytics />;
+      case 'contacts':
+        return <ContactsManagement />;
       case 'settings':
         return <SettingsPage />;
       default:
