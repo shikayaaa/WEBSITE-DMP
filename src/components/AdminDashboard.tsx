@@ -6,7 +6,7 @@ import { UserManagement } from './admin/UserManagement';
 import { LotsManagement } from './admin/LotsManagement';
 import { PaymentsContracts } from './admin/PaymentsContracts';
 import { PreNeedPurchase } from './admin/PreNeedPurchase';
-import { DeedOfSales } from './admin/DeedOfSales';
+import { DeedOfSales } from './admin/DeedOfSale';
 import { IntermentScheduling } from './admin/IntermentScheduling';
 import { ReportsAnalytics } from './admin/ReportsAnalytics';
 import { SettingsPage } from './admin/SettingsPage';
@@ -28,7 +28,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       lots: 'Lots Management',
       payments: 'Payments & Contracts',
       preneed: 'Pre-Need Purchase',
-      deeds: 'Deed of Sales',
+      deeds: 'Deed of Sale',
       interments: 'Interments & Scheduling',
       reports: 'Reports & Analytics',
       contacts: 'Contacts',

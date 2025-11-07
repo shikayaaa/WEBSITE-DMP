@@ -5,7 +5,7 @@ import { StaffDashboardOverview } from './staff/StaffDashboardOverview';
 import { StaffLots } from './staff/StaffLots';
 import { StaffPayments } from './staff/StaffPayments';
 import { StaffPreNeed } from './staff/StaffPreNeed';
-import { StaffDeedOfSales } from './staff/StaffDeedOfSales';
+import { StaffDeedOfSales } from './staff/StaffDeedOfSale';
 import { StaffInterments } from './staff/StaffInterments';
 import { ClientSupport } from './staff/ClientSupport';
 import { StaffSettings } from './staff/StaffSettings';
