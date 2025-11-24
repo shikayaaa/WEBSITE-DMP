@@ -11,7 +11,7 @@ interface TopBarProps {
 export function TopBar({ user, title }: TopBarProps) {
   return (
     <div className="h-16 border-b border-border/30 flex items-center justify-between px-6 relative backdrop-blur-sm"
-         style={{background: 'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(240,253,244,0.9) 100%)'}}>
+         style={{background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,252,255,0.95) 100%)'}}>
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
       
       <div className="flex items-center space-x-4">
@@ -24,7 +24,7 @@ export function TopBar({ user, title }: TopBarProps) {
         <NotificationsPanel />
         
         <div className="flex items-center space-x-3">
-          <div className="card-3d-sm p-0.5 rounded-full" style={{background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)'}}>
+          <div className="card-3d-sm p-0.5 rounded-full" style={{background: 'linear-gradient(135deg, #0D47A1 0%, #2196F3 100%)'}}>
             <Avatar className="border-2 border-white">
               <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 text-primary">
                 {user.name.split(' ').map(n => n[0]).join('')}

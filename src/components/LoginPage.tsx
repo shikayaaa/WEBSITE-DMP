@@ -5,7 +5,6 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import logoImage from '../assets/dmplogofinal.png';
 
-
 interface LoginPageProps {
   onLogin: (email: string, password: string) => void;
 }
@@ -20,65 +19,74 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-secondary/30 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-accent/20 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-primary/20 rounded-full blur-3xl"></div>
-      </div>
-      
-      <Card className="w-full max-w-md card-3d-lg border-0 relative z-10">
+    <div
+      className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
+      style={{
+        background: 'linear-gradient(135deg, #3B82F6 0%, #FFFFFF 100%)', // 💙🤍 Blue-white gradient
+      }}
+    >
+      <Card className="w-full max-w-md border-0 relative z-10 bg-white/95 backdrop-blur-md shadow-2xl">
         <CardHeader className="space-y-6 text-center">
           <div className="flex flex-col items-center gap-4">
             {/* Logo Image */}
             <div className="w-24 h-24 flex items-center justify-center">
-              <img 
-                src={logoImage} 
-                alt="Dumaguete Memorial Park Logo" 
+              <img
+                src={logoImage}
+                alt="Dumaguete Memorial Park Logo"
                 className="w-full h-full object-contain drop-shadow-lg"
               />
             </div>
-            
+
             {/* Text Below Logo */}
             <div className="space-y-2">
-              <CardTitle className="text-2xl heading bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+              <CardTitle className="text-2xl font-bold text-blue-700">
                 Dumaguete Memorial Park
               </CardTitle>
-              <CardDescription className="subheading text-base">Admin & Staff Panel</CardDescription>
+              <CardDescription className="text-base text-gray-600">
+                Admin & Staff Panel
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="subheading">Email</Label>
+              <Label htmlFor="email" className="text-gray-700 font-medium">
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="input-3d transition-all duration-200 focus:ring-2 focus:ring-secondary"
+                className="transition-all duration-200 focus:ring-2 focus:ring-blue-400"
                 required
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="password" className="subheading">Password</Label>
+              <Label htmlFor="password" className="text-gray-700 font-medium">
+                Password
+              </Label>
               <Input
                 id="password"
                 type="password"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="input-3d transition-all duration-200 focus:ring-2 focus:ring-secondary"
+                className="transition-all duration-200 focus:ring-2 focus:ring-blue-400"
                 required
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full button-3d border-0 text-white shadow-lg hover:shadow-2xl"
-              style={{background: 'linear-gradient(135deg, #005B73 0%, #00B8F4 50%, #2DF2A3 100%)'}}
+
+            <Button
+              type="submit"
+              className="w-full border-0 text-white shadow-lg hover:shadow-2xl transition-all duration-200"
+              style={{
+                background: 'linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)', // Deep blue gradient for button
+              }}
             >
               Login
             </Button>

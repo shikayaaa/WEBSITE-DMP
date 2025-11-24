@@ -10,6 +10,7 @@ import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
+import { toast } from 'sonner';
 
 export function SettingsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -138,6 +139,26 @@ export function SettingsPage() {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const handleSaveGeneral = () => {
+    toast.success('General settings saved successfully');
+  };
+
+  const handleSaveNotifications = () => {
+    toast.success('Notification settings saved successfully');
+  };
+
+  const handleSaveSecurity = () => {
+    toast.success('Security settings updated successfully');
+  };
+
+  const handleSaveSystem = () => {
+    toast.success('System settings saved successfully');
+  };
+
+  const handleManualBackup = () => {
+    toast.success('Manual backup initiated successfully');
+  };
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -212,7 +233,7 @@ export function SettingsPage() {
                   </div>
                 </div>
               </div>
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSaveGeneral}>
                 <Save className="h-4 w-4 mr-2" />
                 Save Changes
               </Button>
@@ -298,7 +319,7 @@ export function SettingsPage() {
                 </Select>
               </div>
 
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSaveNotifications}>
                 <Save className="h-4 w-4 mr-2" />
                 Save Settings
               </Button>
@@ -405,7 +426,7 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSaveSecurity}>
                 <Save className="h-4 w-4 mr-2" />
                 Update Security Settings
               </Button>
@@ -444,7 +465,7 @@ export function SettingsPage() {
                   <Label htmlFor="backup-time">Backup Time</Label>
                   <Input id="backup-time" type="time" defaultValue="02:00" className="w-32" />
                 </div>
-                <Button variant="outline">Run Manual Backup</Button>
+                <Button variant="outline" onClick={handleManualBackup}>Run Manual Backup</Button>
               </div>
 
               <div className="space-y-4">
@@ -489,7 +510,7 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSaveSystem}>
                 <Save className="h-4 w-4 mr-2" />
                 Save System Settings
               </Button>

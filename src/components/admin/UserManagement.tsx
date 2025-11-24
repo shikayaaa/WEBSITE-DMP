@@ -532,25 +532,27 @@ export function UserManagement() {
                     {user.lastLogin}
                   </TableCell>
                   <TableCell>
-  <div className="flex items-center space-x-2">
-    <Button 
-      variant="ghost" 
-      size="sm"
-      onClick={() => handleEditUser(user)}
-    >
-      Edit
-    </Button>
-    <Button
-      variant="ghost"
-      size="sm"
-      className="text-red-600 hover:text-red-700"
-      onClick={() => handleDeleteClick(user.id)}
-    >
-      <Trash2 className="h-4 w-4" />
-    </Button>
-  </div>
-</TableCell>
-
+                    <div className="flex items-center space-x-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleEditUser(user)}
+                      >
+                        Edit
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => handleDeleteClick(user.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

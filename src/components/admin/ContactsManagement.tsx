@@ -258,7 +258,9 @@ export function ContactsManagement() {
             <Button variant="outline" onClick={() => setViewContactOpen(false)}>
               Close
             </Button>
-           
+            <Button className="bg-primary hover:bg-primary/90" onClick={() => selectedContact && handleEditContact(selectedContact)}>
+              Edit Contact
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

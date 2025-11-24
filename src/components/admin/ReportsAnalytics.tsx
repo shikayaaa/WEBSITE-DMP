@@ -281,7 +281,7 @@ export function ReportsAnalytics() {
                     <YAxis yAxisId="right" orientation="right" />
                     <Tooltip />
                     <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} />
-                    <Line yAxisId="right" type="monotone" dataKey="lots" stroke="#10b981" strokeWidth={2} />
+                    <Line yAxisId="right" type="monotone" dataKey="lots" stroke="#2196F3" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -328,7 +328,7 @@ export function ReportsAnalytics() {
                     <XAxis dataKey="month" />
                     <YAxis />
                     <Tooltip />
-                    <Bar dataKey="lots" fill="#10b981" />
+                    <Bar dataKey="lots" fill="#2196F3" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -348,7 +348,7 @@ export function ReportsAnalytics() {
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="paid" stackId="a" fill="#10b981" name="Paid %" />
+                  <Bar dataKey="paid" stackId="a" fill="#2196F3" name="Paid %" />
                   <Bar dataKey="pending" stackId="a" fill="#f59e0b" name="Pending %" />
                 </BarChart>
               </ResponsiveContainer>
@@ -376,7 +376,7 @@ export function ReportsAnalytics() {
                       ]}
                     />
                     <Bar yAxisId="left" dataKey="contracts" fill="#3b82f6" name="contracts" />
-                    <Bar yAxisId="right" dataKey="revenue" fill="#10b981" name="revenue" />
+                    <Bar yAxisId="right" dataKey="revenue" fill="#2196F3" name="revenue" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
