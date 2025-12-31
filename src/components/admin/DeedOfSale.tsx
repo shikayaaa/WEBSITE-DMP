@@ -1,179 +1,465 @@
 import React, { useState } from 'react';
-import { Plus, Search, Eye, Edit, Download, FileText, Stamp, Calendar, CheckCircle } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Download, FileText, Stamp, Calendar, CheckCircle, User, MapPin } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Separator } from '../ui/separator';
+import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import html2canvas from 'html2canvas';
 
 export function DeedOfSales() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTemplateDialogOpen, setEditTemplateDialogOpen] = useState(false);
+  const [selectedDeed, setSelectedDeed] = useState<any>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [templateContent, setTemplateContent] = useState<string>('');
 
-  const deedOfSales = [
-    {
-      id: 'DOS-001',
-      deedNumber: 'DMD-2024-001',
-      client: 'Maria Santos',
-      lot: 'A-002',
-      lotSize: '2x3m',
-      purchasePrice: 45000,
-      saleDate: '2024-10-15',
-      transferDate: '2024-10-20',
-      status: 'completed',
-      witness1: 'John Admin',
-      witness2: 'Lisa Lopez',
-      notarizedBy: 'Atty. Carlos Mendoza',
-      registrationNumber: 'REG-2024-045',
-      titleNumber: 'TCT-001-2024',
-      previousOwner: 'Dumaguete Memorial Park',
-      paymentMethod: 'Full Payment',
-      notes: 'Clean transfer, all documents complete'
-    },
-    {
-      id: 'DOS-002',
-      deedNumber: 'DMD-2024-002',
-      client: 'Pedro Garcia',
-      lot: 'B-002',
-      lotSize: '3x3m',
-      purchasePrice: 55000,
-      saleDate: '2024-11-01',
-      transferDate: null,
-      status: 'pending-notarization',
-      witness1: 'John Admin',
-      witness2: 'Maria Staff',
-      notarizedBy: null,
-      registrationNumber: null,
-      titleNumber: null,
-      previousOwner: 'Dumaguete Memorial Park',
-      paymentMethod: 'Installment',
-      notes: 'Awaiting final payment confirmation for notarization'
-    },
-    {
-      id: 'DOS-003',
-      deedNumber: 'DMD-2024-003',
-      client: 'Ana Lopez',
-      lot: 'B-003',
-      lotSize: '3x3m',
-      purchasePrice: 55000,
-      saleDate: '2024-10-05',
-      transferDate: '2024-10-12',
-      status: 'completed',
-      witness1: 'John Admin',
-      witness2: 'Lisa Lopez',
-      notarizedBy: 'Atty. Rosa Villanueva',
-      registrationNumber: 'REG-2024-038',
-      titleNumber: 'TCT-002-2024',
-      previousOwner: 'Dumaguete Memorial Park',
-      paymentMethod: 'Full Payment',
-      notes: 'Premium lot transfer completed'
-    },
-    {
-      id: 'DOS-004',
-      deedNumber: 'DMD-2024-004',
-      client: 'Carlos Rivera',
-      lot: 'C-005',
-      lotSize: '2x2m',
-      purchasePrice: 35000,
-      saleDate: '2024-09-10',
-      transferDate: null,
-      status: 'pending-documents',
-      witness1: 'John Admin',
-      witness2: 'Maria Staff',
-      notarizedBy: null,
-      registrationNumber: null,
-      titleNumber: null,
-      previousOwner: 'Dumaguete Memorial Park',
-      paymentMethod: 'Installment',
-      notes: 'Missing client identification documents'
-    },
-    {
-      id: 'DOS-005',
-      deedNumber: 'DMD-2024-005',
-      client: 'Rosa Garcia',
-      lot: 'D-002',
-      lotSize: '3x4m',
-      purchasePrice: 65000,
-      saleDate: '2024-11-10',
-      transferDate: '2024-11-15',
-      status: 'completed',
-      witness1: 'John Admin',
-      witness2: 'Lisa Lopez',
-      notarizedBy: 'Atty. Miguel Torres',
-      registrationNumber: 'REG-2024-052',
-      titleNumber: 'TCT-003-2024',
-      previousOwner: 'Dumaguete Memorial Park',
-      paymentMethod: 'Full Payment',
-      notes: 'Memorial garden lot, premium location'
-    },
-    {
-      id: 'DOS-006',
-      deedNumber: 'DMD-2024-006',
-      client: 'Juan Dela Cruz',
-      lot: 'A-003',
-      lotSize: '2x3m',
-      purchasePrice: 45000,
-      saleDate: '2024-11-28',
-      transferDate: null,
-      status: 'draft',
-      witness1: null,
-      witness2: null,
-      notarizedBy: null,
-      registrationNumber: null,
-      titleNumber: null,
-      previousOwner: 'Dumaguete Memorial Park',
-      paymentMethod: 'Full Payment',
-      notes: 'Document preparation in progress'
-    },
-  ];
+  // State to store edited template contents
+  const [templateContents, setTemplateContents] = useState<Record<string, string>>({
+    'DEED OF SALE AND CERTIFICATE OF PERPETUAL CARE': `<p><strong>CERTIFICATE NO. _____</strong></p>
+<p style="text-align: center;"><strong>DEED OF SALE AND CERTIFICATE OF PERPETUAL CARE</strong></p>
+<p><br></p>
+<p><strong>KNOW ALL MEN BY THESE PRESENTS:</strong></p>
+<p>That the Dumaguete Memorial Park with principal office at Amigo Subdivision, Piapi, Dumaguete City, hereinafter called the SELLER, for and in consideration of the sum of <strong>_____ PESOS (P _____)</strong>, receipt of which in full is hereby acknowledged in full, and in receipt of <strong>_____ PESOS (P _____)</strong> as contribution to working fund, does by virtue of these presents, hereby SELL, TRANSFER, and CONVEYS to_____________________</strong>, hereinafter called the PURCHASER, of legal age, _____, and residing at_____________________Dumaguete City, Philippines, being a portion of Transfer Certificate of Title No. _____ of Register of Deeds of the City of Dumaguete, and more particularly described in the maps and lot books on file in the Office of the SELLER which are incorporated and made integral parts hereof by reference, as follows:</p>
+<p><br></p>
+<p>LOT: _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BLOCK: _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SECTION: _____</p>
+<p><br></p>
+<p>Subject to the following conditions:</p>
+<p>1. It is expressly agreed by the PURCHASER and the SELLER, the property shall be used only for interment of human remains in accordance with the rules and regulations for the time government of the cemetery.</p>
+<p><br></p>
+<p>2. The PURCHASER shall periodically hereinafter referred to for the government of the cemetery rules and regulations of the SELLER for the government of the cemetery now in force and those which may hereafter be adopted; that a copy of said rules and regulations and all amendments, additions and modifications thereto is kept in SELLER'S office and is subject to inspection by the PURCHASER at all times during normal office hours, said rules and regulations and all amendments, additions and modifications thereto are hereby incorporated herein and made integral parts hereof by reference as if set forth herein in full.</p>
+<p><br></p>
+<p>3. Flat markers of either bronze, stone or composition material, conforming to the aforesaid rules and regulations of SELLER, will be permitted to mark interments in the above described property. Also in those areas in which such structures are permitted, a memorial in the form of a monument, statue, vault, catafalque or mausoleum may be erected in conformity with the aforesaid rules and regulations of SELLER.</p>
+<p><br></p>
+<p>4. In the event the cemetery of SELLER, is subject to real estate tax or any special government assessment, PURCHASER shall pay SELLER promptly an amount equal to the amount of the real estate tax or special government assessment allocable to the above described property, in the due date of said tax or assessment. On default of the PURCHASER of said payment, SELLER has the option to advance the necessary amount thereof, if it so desires, and the PURCHASER is obligated to reimburse the SELLER of said amount upon demand, plus an interest thereon of 14% per annum computed from date of SELLER'S disbursement until fully paid. Any tax due on account of this agreement or on account of any subsequent document relating hereto shall be borne by the PURCHASER.</p>
+<p><br></p>
+<p>5. The PURCHASER may sell, transfer or assign the above described property at any time in accordance with the rules and regulations of SELLER for the time being in force.</p>
+<p><br></p>
+<p>6. The cemetery of SELLER being operated as a perpetual care cemetery, the SELLER hereby certifies that there has been received from PURCHASER the above-mentioned amount of <strong>_____ PESOS (P _____)</strong> as contribution to the perpetual care fund for the perpetual care of the above described property which is paid in the form of a trust in conformity with prudent cemetery management, which said contribution will be set aside and delivered to a trustee of such trust designated by SELLER (or to any other trust which SELLER may create for the perpetual care of said cemetery) to beheld in trust and invested, with any other funds of like character, the net income from which is to be used for the perpetual care of the cemetery of SELLER. As used herein the term "perpetual care" means the cutting of grass upon plots, raking and cleaning of plots, pruning shrubs and trees, and the general preservation of the plots and ground, walks, roadways, boundaries and structures, to the end that said grounds shall remain and be reasonably cared for as a cemetery ground forever.</p>
+<p><br></p>
+<p>7. It is distinctly understood that the SELLER has the irrevocable power to revise or cancel any existing trust and substitute it with another, or establish any trust on such terms and conditions and with such trustee of trustees as the SELLER may determine.</p>
+<p><br></p>
+<p>8. The terms and conditions hereof shall extend to and be binding upon the heirs, executors, administered, successors and assigns of PURCHASER and SELLER. As used herein, the singular includes the feminine, the plural and the masculine includes the feminine.</p>
+<p><br></p>
+<p><strong>IN WITNESS WHEREOF,</strong> the SELLER has hereunto set its hand this _____ day of _____, 20___ Dumaguete City, Neg. Or.</strong></p>
+<p><br></p>
 
-  const filteredDeeds = deedOfSales.filter(deed => {
-    const matchesSearch = deed.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         deed.lot.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         deed.deedNumber.toLowerCase().includes(searchTerm.toLowerCase());
+<p><strong>SIGNED IN THE PRESENCE OF: DUMAGUETE MEMORIAL PARK</strong></p><p>_____________________________&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;By_____________________________</p>
+<p><strong>REPUBLIC OF THE PHILIPPINES)</strong> s.s</p>
+<p>Before me, the undersigned Notary Public in and for <strong>_____________________</strong>, Philippines, personally appeared <strong>_____________________</strong>, in his capacity as <strong>_____________________</strong> of Dumaguete Memorial Park, Dumaguete City, exhibiting to me his Community Certificate No. _____, issued at _____ on _____, and with Community Certificate No. _____, issued at _____ on _____, known to me and to me known to be the same persons who executed the foregoing instrument, and acknowledged to me that they executed the same as their acts of their free will and deed.</p>
+<p><br></p>
+<p><strong>IN TESTIMONY WHEREOF,</strong> I have hereunto set my hand and affixed my notarial seal at _____, Philippines, on this _____ day of _____, 20___</p>
+<p><br></p>
+<p style="text-align: right;"><strong>_____________________</strong></p>
+<p style="text-align: right;">NOTARY PUBLIC</p>
+<p style="text-align: right;">Until _____</p>
+<p><br></p>
+<p>Doc No. _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Page No. _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Book No. _____ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Series 20 _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp</p>`,
+    'PRE-NEED PURCHASE AGREEMENT': `<p style="text-align: right;">CONTRACT NO. _____</p>
+<p style="text-align: center;"><strong>DUMAGUETE MEMORIAL PARK</strong></p>
+<p style="text-align: center;"><em>"A Perpetual Care Cemetery"</em></p>
+<p style="text-align: center;"><strong>PRE-NEED PURCHASE AGREEMENT</strong></p>
+<p><br></p>
+<p>THIS AGREEMENT made on _____ as SELLER and _____________________ 20_____ between DUMAGUETE MEMORIAL PARK _____________________ the PURCHASER.</p>
+<p><br></p>
+<p style="text-align: center;"><strong>WITNESSETH:</strong></p>
+<p><br></p>
+<p>That the PURCHASER agrees to purchase and SELLER agrees to sell to PURCHASER for interment purposes only that certain property situated within the cemetery of Seller at San Jose Extension, Dumaguete City, Philippines, and more particularly described in the maps and lot books on file in the office of the Seller as follows:</p>
+<p><br></p>
+<p>Lot _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Block _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Section _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Lot Price P _____</p>
+<p>Lot _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Block _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Section _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Lot Price P _____</p>
+<p style="text-align: right;">TOTAL LOT PRICE _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P _____</p>
+<p style="text-align: right;">PERPETUAL CARE _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P _____</p>
+<p style="text-align: right;">TOTAL LIST PRICE _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P _____</p>
+<p><br></p>
+<p>Purchaser agrees to pay to Seller in Philippine Currency P _____ as purchase price for the aforesaid property and P _____ as his contribution to the Perpetual Care Fund, the sum total of both amounts to be paid by Purchaser as follows: to wit P _____ (___%) upon execution of this contract, P _____ (___%) as down payment and the balance or the amount of P _____ is payable in equal first to twelfth (___) monthly installments every _____ day of each and every month, commencing on _____, 20_____ including interest charges on the declining balance thereof totalling twelve per cent (12%) per annum, on the _____ day of each and every month, commencing on _____ 20_____ until the entire balance has been paid. All unpaid installments shall bear interest at the rate of fourteen per cent (14%) per annum on the unpaid balance, from the date of default to Perpetual Care Fund.</p>
+<p><br></p>
+<p>Time is of the essence in this agreement and it is agreed that should any of the amounts herein remain unperformed by the PURCHASER for a period of sixty (60) days after the same shall become due, this agreement shall become null and void and all payments made prior to such re-entry shall belong to the SELLER as liquidated damages and PURCHASER hereby consents to vacate peacefully the aforesaid interment space if a breach of this contract should occur. In any event, the estate of PURCHASER shall remain bound to make payments to the SELLER for any payment which had become due and payable prior to the date of death of the PURCHASER.</p>
+<p><br></p>
+<p>It is agreed that if for any reason the above described interment space is not satisfactory to the PURCHASER and provided no interment has been made therein by the PURCHASER or persons approved and authorized by the PURCHASER, the said interment space may be exchanged for another space in DUMAGUETE MEMORIAL PARK. Exchange credit will be given for the amount already paid on principal and perpetual care. Interment will be subject to the terms and conditions set forth herein and subject to the rules and regulations of Seller, a copy of which may be examined at the office of Seller.</p>
+<p><br></p>
+<p>The PURCHASER shall not sell, transfer, or assign any interest in Purchaser, Seller will convey and deliver to Purchaser by DEED OF SALE the aforesaid property for interment of human remains only. The DEED OF SALE is subject to all such rules and regulations governing the cemetery of Seller. A copy of said rules and regulations and all amendments, additions and modifications is on file in Seller's office, is subject to inspection and copies are available on request. Such rules and regulations are hereby incorporated herein and made integral parts of this contract only the markers not in excess of 15" x 24" or otherwise agrees that the PURCHASER may sell, transfer, or assign this interment property at any time, subject to the rules and regulations of the Seller, and if sold, PURCHASER agrees to reimburse the SELLER for services rendered. The SELLER will not resell this property to the PURCHASER.</p>
+<p><br></p>
+<p>It is agreed that the cemetery of Seller is operated as a perpetual care cemetery which means that a Perpetual Care Fund in the form of an irrevocable trust has been established and that Seller will invest in such trust (or any other trust which Seller may create for the perpetual care of said cemetery) a Seller covenants with Purchaser that the deposit by Purchaser in said fund (Perpetual Care Fund) in the amount of P _____ (or any other trust which Seller may create for the perpetual care of said cemetery) is a trust fund, the net income from which is to be used for the perpetual care of the cemetery of Seller. As used herein, the term "Perpetual Care" means the cutting of grass on the plots and grounds, walks, roadways, boundaries and structures, to the end that said grounds shall remain and be reasonably cared for as a cemetery ground forever.</p>
+<p><br></p>
+<p>PURCHASER agrees that he has read this contract as evidenced by his signature herein, that there are no verbal terms, conditions, warranties or representations other than those contained herein. THIS CONTRACT IS NOT VALID UNTIL ACCEPTED BY THE SELLER and SELLER is authorized to issue Deed of Sale as follows:</p>
+<p><br></p>
+<p>Name: _____________________</p>
+<p><br></p>
+<p>_____________________</p>
+<p><br></p>
+<p>_____________________</p>
+<p><br></p>
+<p>The terms and conditions hereof shall extend to and be binding upon the heirs, executors, administrators, successors and assigns of the respective parties. A caveat herein, the singular includes the plural and the masculine includes the feminine. The obligation and liabilities of PURCHASERS hereunder are joint and several.</p>
+<p><br></p>
+<p>Counselor _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Purchaser</p>
+<p><br></p>
+<p>ACCEPTED ON _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, 20_____ Res. Cert. A _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at _____</p>
+<p><br></p>
+<p>By: _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Home Address: _____</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Business Address: _____</p>
+<p>Map Clerk _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Official Receipt No. _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Telephone: Home _____ Bus. _____</p>
+<p><br></p>
+<p>_____________________</p>`,
+    'SERVICE INVOICE': `<p><em>DUMAGUETE MEMORIAL PARK</em></p>
+<p>San Jose Ext. Bogo Taclobo 6200 City of Dumaguete</p>
+<p>Negros Oriental Philippines</p>
+<p><strong>GABRIEL D. AMIGO</strong> - Prop.</p>
+<p>VAT Reg. TIN # 171-188-791-00000</p>
+<p><br></p>
+<p style="text-align: right;"><strong>SERVICE</strong></p>
+<p style="text-align: right;"><strong>INVOICE</strong></p>
+<p><br></p>
+<p style="text-align: right;">Inv. <strong>N<sup>o</sup></strong> _____</p>
+<p style="text-align: right;">DATE _____</p>
+<p><br></p>
+<p>CUSTOMER NAME: _____________________________________________________________________________________</p>
+<p>Address: _______________________________________________________________ TIN: _____________________</p>
+<p><br></p>
+<p><strong>Item Description / Nature of Service&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Quantity&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Unit Price&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Amount</strong></p>
+<p>_____________________________________________________________________________________________________________________________________________________</p>
+<p><br></p>
+<p>_____________________________________________________________________________________________________________________________________________________</p>
+<p><br></p>
+<p>_____________________________________________________________________________________________________________________________________________________</p>
+<p><br></p>
+<p>_____________________________________________________________________________________________________________________________________________________</p>
+<p><br></p>
+<p>_____________________________________________________________________________________________________________________________________________________</p>
+<p><br></p>
+<p>_____________________________________________________________________________________________________________________________________________________</p>
+<p><br></p>
+<p style="text-align: right;"><strong>TOTAL</strong> _____________________</p>
+<p><br></p>
+<p style="text-align: right;"><strong>Total Sales (VAT-Inclusive)</strong> _____</p>
+<p style="text-align: right;"><strong>Less: VAT</strong> _____</p>
+<p style="text-align: right;"><strong>Amount: Net of VAT</strong> _____</p>
+<p style="text-align: right;"><strong>Less: Discount</strong> _____</p>
+<p style="text-align: right;"><strong>SC/PWD/NAAC/MOV/SP</strong> _____</p>
+<p style="text-align: right;"><strong>Add: VAT</strong> _____</p>
+<p style="text-align: right;"><strong>Less: Withholding Tax</strong> _____</p>
+<p style="text-align: right;"><strong>TOTAL AMOUNT DUE</strong> _____</p>
+<p><br></p>
+<p style="text-align: right;"><strong>Vatable Sales</strong> _____</p>
+<p style="text-align: right;"><strong>VAT</strong> _____</p>
+<p style="text-align: right;"><strong>Zero-Rated Sales</strong> _____</p>
+<p style="text-align: right;"><strong>VAT-Exempt Sales</strong> _____</p>
+<p><br></p>
+<p>( ) Cash</p>
+<p>( ) Check</p>
+<p>( ) Bank transfer</p>
+<p><br></p>
+<p><br></p>
+<p>50 bks (50x2) 0001-2500</p>
+<p><strong>NOEL J. CABALLES</strong> - Prop.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S-PNNMAAUACACV1</p>
+<p>BIR Authority to Print No. 073AU20250000006223&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solo Parent ID No.</p>
+<p>Date of ATP: 8-16-2025&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<strong>N.J CABALLES PRINTING PRESS</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SC/PWD/NAAC/MOV/</p>
+<p>225-079/9622-2332 / TIN 116-582-751-000-VAT&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SP Signature</p>
+<p>Accreditation No. 079MIP21230900090001 Date Issued: 02-20-2023 Expiry Date: 02-19-2026</p>
+<p><br></p>
+<p style="text-align: right;"><strong>CASHIER / AUTHORIZED PERSON</strong></p>`
+  });
+
+  // Mock data
+  const [deeds, setDeeds] = useState([
+    {
+      id: 'DOS-2024-001',
+      clientName: 'Roberto Santos',
+      lotNumber: 'A-125',
+      block: 'Section A',
+      saleDate: '2024-01-15',
+      amount: '₱125,000',
+
+    
+      status: 'completed',
+      notarizedBy: 'Atty. Maria Cruz',
+      registrationNumber: 'REG-2024-001',
+      titleNumber: 'TCT-12345',
+      notes: 'Standard single lot sale'
+    },
+    {
+      id: 'DOS-2024-002',
+      clientName: 'Elena Martinez',
+      lotNumber: 'B-089',
+      block: 'Section B',
+      saleDate: '2024-02-20',
+      amount: '₱98,500',
+      status: 'pending',
+      notarizedBy: '',
+      registrationNumber: '',
+      titleNumber: '',
+      notes: 'Awaiting final payment confirmation'
+    },
+    {
+      id: 'DOS-2024-003',
+      clientName: 'Family Garcia',
+      lotNumber: 'C-045',
+      block: 'Section C',
+      saleDate: '2024-03-10',
+      amount: '₱450,000',
+      status: 'completed',
+      notarizedBy: 'Atty. Juan Dela Cruz',
+      registrationNumber: 'REG-2024-015',
+      titleNumber: 'TCT-12389',
+      notes: 'Family plot - 4 units'
+    },
+  ]);
+
+  const filteredDeeds = deeds.filter(deed => {
+    const matchesSearch = deed.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         deed.lotNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         deed.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || deed.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'pending-notarization': return 'bg-yellow-100 text-yellow-800';
-      case 'pending-documents': return 'bg-orange-100 text-orange-800';
-      case 'draft': return 'bg-blue-100 text-blue-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const stats = {
+    totalDeeds: deeds.length,
+    completed: deeds.filter(d => d.status === 'completed').length,
+    pending: deeds.filter(d => d.status === 'pending').length,
+    totalValue: '₱673,500'
   };
 
-  const completedDeeds = deedOfSales.filter(d => d.status === 'completed').length;
-  const pendingDeeds = deedOfSales.filter(d => d.status === 'pending-notarization' || d.status === 'pending-documents').length;
-  const totalValue = deedOfSales.reduce((sum, deed) => sum + deed.purchasePrice, 0);
-  const monthlyDeeds = deedOfSales.filter(d => d.saleDate.startsWith('2024-12')).length;
+  const handleCreateDeed = () => {
+    toast.success('Deed of Sale created successfully', {
+      description: 'The document has been generated and is ready for notarization'
+    });
+    setCreateDialogOpen(false);
+  };
 
+  const handleViewDeed = (deed: any) => {
+    setSelectedDeed(deed);
+    setViewDialogOpen(true);
+  };
+
+  const handleEditDeed = (deed: any) => {
+    setSelectedDeed(deed);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    toast.success('Deed updated successfully', {
+      description: 'All changes have been saved'
+    });
+    setEditDialogOpen(false);
+  };
+
+  const handleNotarize = (deed: any) => {
+    toast.success('Deed notarized', {
+      description: `${deed.id} has been marked as notarized`
+    });
+  };
+
+  const handleEditTemplate = (templateName: string) => {
+    setSelectedTemplate(templateName);
+    // Load the current template content from state
+    setTemplateContent(templateContents[templateName] || '');
+    setEditTemplateDialogOpen(true);
+  };
+
+ const handleDownloadTemplate = (templateName: string) => {
+    const content = templateContents[templateName] || '';
+    
+    if (!content) {
+      toast.error('Template not found');
+      return;
+    }
+    
+    // Create PDF with Legal size (long bond paper: 8.5" x 14")
+    const doc = new jsPDF({
+      format: 'legal'
+    });
+    
+    const parseHtmlToPdf = (htmlContent: string) => {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlContent;
+      
+      let y = 10;
+      const pageHeight = doc.internal.pageSize.height;
+      const pageWidth = doc.internal.pageSize.width;
+      const leftMargin = 10;
+      const rightMargin = 10;
+      const maxWidth = pageWidth - leftMargin - rightMargin;
+      const lineSpacing = 4.2;
+      
+      const justifyLine = (words: string[], width: number, x: number, yPos: number) => {
+        if (words.length === 1) {
+          doc.text(words[0], x, yPos);
+          return;
+        }
+        
+        const totalWordsWidth = words.reduce((sum, word) => sum + doc.getTextWidth(word), 0);
+        const totalSpaceWidth = width - totalWordsWidth;
+        const spaceWidth = totalSpaceWidth / (words.length - 1);
+        
+        let currentX = x;
+        words.forEach((word, idx) => {
+          doc.text(word, currentX, yPos);
+          if (idx < words.length - 1) {
+            currentX += doc.getTextWidth(word) + spaceWidth;
+          }
+        });
+      };
+      
+      const processElement = (element: HTMLElement, parentAlign: string = 'justify') => {
+        const tagName = element.tagName.toLowerCase();
+        const style = element.getAttribute('style') || '';
+        const alignMatch = style.match(/text-align:\s*(left|center|right|justify)/);
+        const align = alignMatch ? alignMatch[1] : parentAlign;
+        
+        if (tagName === 'p') {
+          const textContent = element.textContent?.trim();
+          
+          if (!textContent) {
+            y += lineSpacing;
+            return;
+          }
+          
+          // Build complete paragraph text with formatting markers
+          let paragraphParts: Array<{text: string, bold: boolean}> = [];
+          
+          const collectText = (node: Node, isBold: boolean = false) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const text = node.textContent || '';
+              if (text.trim()) {
+                paragraphParts.push({ text: text, bold: isBold });
+              }
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              const el = node as HTMLElement;
+              const elTag = el.tagName.toLowerCase();
+              const newBold = isBold || elTag === 'strong' || elTag === 'b';
+              Array.from(el.childNodes).forEach(child => collectText(child, newBold));
+            }
+          };
+          
+          Array.from(element.childNodes).forEach(node => collectText(node));
+          
+          // Now render the paragraph with proper justification
+          let currentLine = '';
+          let currentLineWords: Array<{text: string, bold: boolean}> = [];
+          
+          const renderLine = (isLast: boolean = false) => {
+            if (currentLineWords.length === 0) return;
+            
+            if (y > pageHeight - 20) {
+              doc.addPage();
+              y = 13;
+            }
+            
+            if (align === 'center') {
+              const lineText = currentLineWords.map(w => w.text).join(' ');
+              doc.setFont('times', currentLineWords[0].bold ? 'bold' : 'normal');
+              doc.setFontSize(10.5);
+              const textWidth = doc.getTextWidth(lineText);
+              const xPos = (pageWidth - textWidth) / 2;
+              doc.text(lineText, xPos, y);
+            } else if (align === 'right') {
+              const lineText = currentLineWords.map(w => w.text).join(' ');
+              doc.setFont('times', currentLineWords[0].bold ? 'bold' : 'normal');
+              doc.setFontSize(10.5);
+              const textWidth = doc.getTextWidth(lineText);
+              const xPos = pageWidth - rightMargin - textWidth;
+              doc.text(lineText, xPos, y);
+            } else {
+              // Justify
+              if (isLast) {
+                // Last line - left aligned
+                let xPos = leftMargin;
+                currentLineWords.forEach(word => {
+                  doc.setFont('times', word.bold ? 'bold' : 'normal');
+                  doc.setFontSize(10.5);
+                  doc.text(word.text, xPos, y);
+                  xPos += doc.getTextWidth(word.text + ' ');
+                });
+              } else {
+                // Justify the line
+                const wordsText = currentLineWords.map(w => w.text);
+                doc.setFont('times', currentLineWords[0].bold ? 'bold' : 'normal');
+                doc.setFontSize(10.5);
+                justifyLine(wordsText, maxWidth, leftMargin, y);
+              }
+            }
+            
+            y += lineSpacing;
+            currentLineWords = [];
+            currentLine = '';
+          };
+          
+          // Split into lines respecting formatting
+          paragraphParts.forEach((part, partIdx) => {
+            const words = part.text.trim().split(/\s+/);
+            
+            words.forEach((word, wordIdx) => {
+              const testLine = currentLine + (currentLine ? ' ' : '') + word;
+              doc.setFont('times', part.bold ? 'bold' : 'normal');
+              doc.setFontSize(10.5);
+              
+              if (doc.getTextWidth(testLine) > maxWidth && currentLine) {
+                renderLine(false);
+              }
+              
+              currentLine += (currentLine ? ' ' : '') + word;
+              currentLineWords.push({ text: word, bold: part.bold });
+            });
+          });
+          
+          if (currentLine) {
+            renderLine(true);
+          }
+          
+        } else if (tagName === 'br') {
+          y += lineSpacing;
+        } else {
+          Array.from(element.children).forEach(child => {
+            processElement(child as HTMLElement, align);
+          });
+        }
+      };
+      
+      Array.from(tempDiv.children).forEach(child => {
+        processElement(child as HTMLElement);
+      });
+    };
+    
+    parseHtmlToPdf(content);
+    doc.save(`${templateName.replace(/\s+/g, '_')}.pdf`);
+    
+    toast.success('Template downloaded successfully', {
+      description: `${templateName} has been downloaded as PDF on legal-size paper`
+    });
+  };
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold">Deed of Sale</h2>
-          <p className="text-muted-foreground">Manage property transfer documents and ownership records</p>
+          <p className="text-muted-foreground">Manage property transfer documents and templates</p>
         </div>
-        <Dialog>
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
-              New Deed of Sale
+              Create New Deed
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Deed of Sale</DialogTitle>
-              <DialogDescription>Generate a new property transfer document</DialogDescription>
+              <DialogDescription>Enter the details for the new deed of sale document</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -183,290 +469,182 @@ export function DeedOfSales() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lot-number">Lot Number</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select lot" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="A-001">A-001 (2x3m)</SelectItem>
-                      <SelectItem value="B-001">B-001 (3x3m)</SelectItem>
-                      <SelectItem value="C-001">C-001 (2x2m)</SelectItem>
-                      <SelectItem value="D-001">D-001 (3x4m)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input id="lot-number" placeholder="e.g., A-125" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="block">Block/Section</Label>
+                  <Input id="block" placeholder="e.g., Section A" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="purchase-price">Purchase Price</Label>
-                  <Input id="purchase-price" type="number" placeholder="0" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sale-date">Sale Date</Label>
-                  <Input id="sale-date" type="date" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="payment-method">Payment Method</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full">Full Payment</SelectItem>
-                      <SelectItem value="installment">Installment</SelectItem>
-                      <SelectItem value="preneed">Pre-Need Plan</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="witness1">Witness 1</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select witness" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="John Admin">John Admin</SelectItem>
-                      <SelectItem value="Maria Staff">Maria Staff</SelectItem>
-                      <SelectItem value="Lisa Lopez">Lisa Lopez</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="witness2">Witness 2</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select witness" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="John Admin">John Admin</SelectItem>
-                      <SelectItem value="Maria Staff">Maria Staff</SelectItem>
-                      <SelectItem value="Lisa Lopez">Lisa Lopez</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="notary">Notary Public</Label>
-                  <Input id="notary" placeholder="Enter notary name" />
+                  <Label htmlFor="amount">Sale Amount</Label>
+                  <Input id="amount" placeholder="₱" />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="notes">Additional Notes</Label>
-                <Textarea id="notes" placeholder="Any special conditions or notes..." rows={3} />
+                <Label htmlFor="template">Template</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard Deed Template</SelectItem>
+                    <SelectItem value="preneed">Pre-Need Transfer Template</SelectItem>
+                    <SelectItem value="family">Family Plot Template</SelectItem>
+                    <SelectItem value="transfer">Transfer of Rights Template</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline">Save as Draft</Button>
-                <Button className="bg-blue-600 hover:bg-blue-700">Create Deed</Button>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Additional Notes</Label>
+                <Textarea id="notes" rows={3} />
               </div>
             </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleCreateDeed} className="bg-blue-600 hover:bg-blue-700">Generate Deed</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Completed Deeds</p>
-                <p className="text-xl font-bold text-green-600">{completedDeeds}</p>
+                <p className="text-sm text-muted-foreground">Total Deeds</p>
+                <p className="text-2xl font-bold">{stats.totalDeeds}</p>
               </div>
+              <FileText className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-5 w-5 text-yellow-600" />
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending Process</p>
-                <p className="text-xl font-bold text-yellow-600">{pendingDeeds}</p>
+                <p className="text-sm text-muted-foreground">Completed</p>
+                <p className="text-2xl font-bold">{stats.completed}</p>
               </div>
+              <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <FileText className="h-5 w-5 text-blue-600" />
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-2xl font-bold">{stats.pending}</p>
+              </div>
+              <Calendar className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Value</p>
-                <p className="text-xl font-bold text-blue-600">₱{totalValue.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{stats.totalValue}</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Stamp className="h-5 w-5 text-purple-600" />
-              <div>
-                <p className="text-sm text-muted-foreground">This Month</p>
-                <p className="text-xl font-bold text-purple-600">{monthlyDeeds}</p>
-              </div>
+              <Stamp className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="deeds" className="space-y-4">
+      <Tabs defaultValue="deeds" className="w-full">
         <TabsList>
-          <TabsTrigger value="deeds">Deed of Sales</TabsTrigger>
+          <TabsTrigger value="deeds">Deeds Registry</TabsTrigger>
           <TabsTrigger value="templates">Document Templates</TabsTrigger>
         </TabsList>
 
         <TabsContent value="deeds" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Deed of Sales Records</CardTitle>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search deeds..."
+                    placeholder="Search by client name, lot number, or deed ID..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue />
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="pending-notarization">Pending Notarization</SelectItem>
-                    <SelectItem value="pending-documents">Pending Documents</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Deed Number</TableHead>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Lot</TableHead>
-                      <TableHead>Purchase Price</TableHead>
-                      <TableHead>Sale Date</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Deed ID</TableHead>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead>Lot Number</TableHead>
+                    <TableHead>Block/Section</TableHead>
+                    <TableHead>Sale Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredDeeds.map((deed) => (
+                    <TableRow key={deed.id}>
+                      <TableCell className="font-medium">{deed.id}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          {deed.clientName}
+                        </div>
+                      </TableCell>
+                      <TableCell>{deed.lotNumber}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          {deed.block}
+                        </div>
+                      </TableCell>
+                      <TableCell>{deed.saleDate}</TableCell>
+                      <TableCell className="font-medium">{deed.amount}</TableCell>
+                      <TableCell>
+                        <Badge variant={deed.status === 'completed' ? 'default' : 'secondary'}>
+                          {deed.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleViewDeed(deed)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleEditDeed(deed)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {deed.status === 'pending' && (
+                            <Button variant="ghost" size="sm" onClick={() => handleNotarize(deed)}>
+                              <Stamp className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredDeeds.map((deed) => (
-                      <TableRow key={deed.id}>
-                        <TableCell className="font-medium">{deed.deedNumber}</TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{deed.client}</p>
-                            <p className="text-sm text-muted-foreground">{deed.id}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{deed.lot}</p>
-                            <p className="text-sm text-muted-foreground">{deed.lotSize}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>₱{deed.purchasePrice.toLocaleString()}</TableCell>
-                        <TableCell>{deed.saleDate}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(deed.status)}>
-                            {deed.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-2xl">
-                                <DialogHeader>
-                                  <DialogTitle>Deed of Sale Details - {deed.deedNumber}</DialogTitle>
-                                  <DialogDescription>Complete deed information and transfer details</DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Client</p>
-                                      <p className="font-medium">{deed.client}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Lot</p>
-                                      <p className="font-medium">{deed.lot} ({deed.lotSize})</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Purchase Price</p>
-                                      <p className="font-medium">₱{deed.purchasePrice.toLocaleString()}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Sale Date</p>
-                                      <p className="font-medium">{deed.saleDate}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Transfer Date</p>
-                                      <p className="font-medium">{deed.transferDate || 'Pending'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Payment Method</p>
-                                      <p className="font-medium">{deed.paymentMethod}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Witness 1</p>
-                                      <p className="font-medium">{deed.witness1 || 'Not assigned'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Witness 2</p>
-                                      <p className="font-medium">{deed.witness2 || 'Not assigned'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Notarized By</p>
-                                      <p className="font-medium">{deed.notarizedBy || 'Pending'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Registration Number</p>
-                                      <p className="font-medium">{deed.registrationNumber || 'Pending'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Title Number</p>
-                                      <p className="font-medium">{deed.titleNumber || 'Pending'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Status</p>
-                                      <Badge className={getStatusColor(deed.status)}>
-                                        {deed.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                  {deed.notes && (
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Notes</p>
-                                      <p className="font-medium">{deed.notes}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -483,14 +661,14 @@ export function DeedOfSales() {
                   <CardContent className="p-6">
                     <div className="space-y-3">
                       <FileText className="h-8 w-8 text-blue-600" />
-                      <h3 className="font-semibold">Standard Deed Template</h3>
-                      <p className="text-sm text-muted-foreground">Standard format for regular lot transfers</p>
+                      <h3 className="font-semibold">DEED OF SALE AND CERTIFICATE OF PERPETUAL CARE</h3>
+                      <p className="text-sm text-muted-foreground">Official deed of sale with perpetual care certificate</p>
                       <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" className="flex-1">
+                        <Button variant="outline" size="sm" className="flex-[1.2]" onClick={() => handleEditTemplate('DEED OF SALE AND CERTIFICATE OF PERPETUAL CARE')}>
                           <Edit className="h-4 w-4 mr-1" />
                           Edit
                         </Button>
-                        <Button variant="outline" size="sm" className="flex-1">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownloadTemplate('DEED OF SALE AND CERTIFICATE OF PERPETUAL CARE')}>
                           <Download className="h-4 w-4 mr-1" />
                           Download
                         </Button>
@@ -498,19 +676,18 @@ export function DeedOfSales() {
                     </div>
                   </CardContent>
                 </Card>
-                
                 <Card className="border-2 hover:border-blue-200 transition-colors">
                   <CardContent className="p-6">
                     <div className="space-y-3">
-                      <FileText className="h-8 w-8 text-green-600" />
-                      <h3 className="font-semibold">Pre-Need Transfer Template</h3>
-                      <p className="text-sm text-muted-foreground">Specialized template for pre-need plan transfers</p>
+                      <FileText className="h-8 w-8 text-blue-600" />
+                      <h3 className="font-semibold">PRE-NEED PURCHASE AGREEMENT</h3>
+                      <p className="text-sm text-muted-foreground">Pre-need purchase agreement for cemetery lots</p>
                       <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" className="flex-1">
+                        <Button variant="outline" size="sm" className="flex-[1.2]" onClick={() => handleEditTemplate('PRE-NEED PURCHASE AGREEMENT')}>
                           <Edit className="h-4 w-4 mr-1" />
                           Edit
                         </Button>
-                        <Button variant="outline" size="sm" className="flex-1">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownloadTemplate('PRE-NEED PURCHASE AGREEMENT')}>
                           <Download className="h-4 w-4 mr-1" />
                           Download
                         </Button>
@@ -518,39 +695,18 @@ export function DeedOfSales() {
                     </div>
                   </CardContent>
                 </Card>
-
                 <Card className="border-2 hover:border-blue-200 transition-colors">
                   <CardContent className="p-6">
                     <div className="space-y-3">
-                      <FileText className="h-8 w-8 text-purple-600" />
-                      <h3 className="font-semibold">Family Plot Template</h3>
-                      <p className="text-sm text-muted-foreground">Template for large family plot transfers</p>
+                      <FileText className="h-8 w-8 text-blue-600" />
+                      <h3 className="font-semibold">SERVICE INVOICE</h3>
+                      <p className="text-sm text-muted-foreground">Service invoice for cemetery services and transactions</p>
                       <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" className="flex-1">
+                        <Button variant="outline" size="sm" className="flex-[1.2]" onClick={() => handleEditTemplate('SERVICE INVOICE')}>
                           <Edit className="h-4 w-4 mr-1" />
                           Edit
                         </Button>
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <Download className="h-4 w-4 mr-1" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-2 hover:border-blue-200 transition-colors">
-                  <CardContent className="p-6">
-                    <div className="space-y-3">
-                      <FileText className="h-8 w-8 text-orange-600" />
-                      <h3 className="font-semibold">Transfer of Rights Template</h3>
-                      <p className="text-sm text-muted-foreground">Template for transferring existing rights</p>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button variant="outline" size="sm" className="flex-1">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownloadTemplate('SERVICE INVOICE')}>
                           <Download className="h-4 w-4 mr-1" />
                           Download
                         </Button>
@@ -563,6 +719,229 @@ export function DeedOfSales() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* View Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Deed of Sale Details</DialogTitle>
+            <DialogDescription>Complete information for {selectedDeed?.id}</DialogDescription>
+          </DialogHeader>
+          {selectedDeed && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg border-b pb-2">Basic Information</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-muted-foreground">Deed ID</Label>
+                      <p className="font-medium">{selectedDeed.id}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Client Name</Label>
+                      <p className="font-medium">{selectedDeed.clientName}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Sale Date</Label>
+                      <p className="font-medium">{selectedDeed.saleDate}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Amount</Label>
+                      <p className="font-medium text-lg">{selectedDeed.amount}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg border-b pb-2">Property Details</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-muted-foreground">Lot Number</Label>
+                      <p className="font-medium">{selectedDeed.lotNumber}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Block/Section</Label>
+                      <p className="font-medium">{selectedDeed.block}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Status</Label>
+                      <Badge variant={selectedDeed.status === 'completed' ? 'default' : 'secondary'}>
+                        {selectedDeed.status}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg border-b pb-2">Legal Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground">Notarized By</Label>
+                    <p className="font-medium">{selectedDeed.notarizedBy || 'Pending'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Registration Number</Label>
+                    <p className="font-medium">{selectedDeed.registrationNumber || 'Pending'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Title Number</Label>
+                    <p className="font-medium">{selectedDeed.titleNumber || 'Pending'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Notes</Label>
+                <p>{selectedDeed.notes}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewDialogOpen(false)}>Close</Button>
+            <Button onClick={() => {
+              setViewDialogOpen(false);
+              handleEditDeed(selectedDeed);
+            }} className="bg-blue-600 hover:bg-blue-700">Edit Deed</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Deed of Sale</DialogTitle>
+            <DialogDescription>Update the details for {selectedDeed?.id}</DialogDescription>
+          </DialogHeader>
+          {selectedDeed && (
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="font-medium">Basic Information</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-client">Client Name</Label>
+                    <Input id="edit-client" defaultValue={selectedDeed.clientName} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-lot">Lot Number</Label>
+                    <Input id="edit-lot" defaultValue={selectedDeed.lotNumber} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-block">Block/Section</Label>
+                    <Input id="edit-block" defaultValue={selectedDeed.block} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-amount">Amount</Label>
+                    <Input id="edit-amount" defaultValue={selectedDeed.amount} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-date">Sale Date</Label>
+                  <Input id="edit-date" type="date" defaultValue={selectedDeed.saleDate} />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <h4 className="font-medium">Legal Information</h4>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-notary">Notarized By</Label>
+                    <Input id="edit-notary" defaultValue={selectedDeed.notarizedBy || ''} placeholder="Enter notary name" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-registration">Registration Number</Label>
+                      <Input id="edit-registration" defaultValue={selectedDeed.registrationNumber || ''} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-title">Title Number</Label>
+                      <Input id="edit-title" defaultValue={selectedDeed.titleNumber || ''} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea id="edit-notes" defaultValue={selectedDeed.notes} rows={3} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Template Dialog */}
+      <Dialog open={editTemplateDialogOpen} onOpenChange={setEditTemplateDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Template - {selectedTemplate}</DialogTitle>
+            <DialogDescription>Use the rich text editor to format your template with bold text, spacing, and more</DialogDescription>
+          </DialogHeader>
+          {selectedTemplate && (
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="font-medium">Template Content</h4>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Content</Label>
+                    <div className="border rounded-md">
+                      <ReactQuill 
+                        theme="snow"
+                        value={templateContent} 
+                        onChange={setTemplateContent}
+                        style={{ minHeight: '400px' }}
+                        modules={{
+                          toolbar: [
+                            [{ 'header': [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            [{ 'indent': '-1'}, { 'indent': '+1' }],
+                            [{ 'align': [] }],
+                            ['clean']
+                          ]
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTemplateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              // The content is already in templateContent state from ReactQuill
+              if (selectedTemplate && templateContent) {
+                // Update the template content in state
+                setTemplateContents({
+                  ...templateContents,
+                  [selectedTemplate]: templateContent
+                });
+                
+                toast.success('Template updated successfully', {
+                  description: 'All changes have been saved'
+                });
+              }
+              
+              setEditTemplateDialogOpen(false);
+            }} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

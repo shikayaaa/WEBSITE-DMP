@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Save, Bell, Shield, Palette, Database, Activity, Search, Calendar, User, Edit, Trash2, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Save, Bell, Shield, Palette, Database, Activity, Search, Calendar, User, Edit, FileText } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -11,103 +11,274 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
+import { Timestamp } from 'firebase/firestore';
+import { 
+  type Settings, 
+  type ActivityLog, 
+  fetchSettings, 
+  updateSettings, 
+  fetchActivityLogs,
+  triggerManualBackup 
+} from '../../firebase.service';
 
+// ...// ← Goes from src/components/admin/ to src/
 export function SettingsPage() {
+  // State management
+  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  
+  // UI State
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const logsPerPage = 10;
 
-  // Mock activity logs data
-  const activityLogs = [
-    {
-      id: '1',
-      user: 'Sheree (Admin)',
-      action: 'Added Payment',
-      details: 'Payment record PAY-001 for Maria Santos',
-      timestamp: '2024-12-20 14:30:15',
-      type: 'payment'
-    },
-    {
-      id: '2',
-      user: 'Jean (Staff)',
-      action: 'Updated Interment',
-      details: 'Changed status of interment INT-005 to Completed',
-      timestamp: '2024-12-20 13:45:22',
-      type: 'interment'
-    },
-    {
-      id: '3',
-      user: 'Sheree (Admin)',
-      action: 'Created Contract',
-      details: 'Generated contract CON-006 for Pedro Garcia',
-      timestamp: '2024-12-20 11:20:08',
-      type: 'contract'
-    },
-    {
-      id: '4',
-      user: 'Jean (Staff)',
-      action: 'Edited Client',
-      details: 'Updated contact information for Ana Lopez',
-      timestamp: '2024-12-20 10:15:33',
-      type: 'client'
-    },
-    {
-      id: '5',
-      user: 'Sheree (Admin)',
-      action: 'Deleted Lot',
-      details: 'Removed lot D-001 from inventory',
-      timestamp: '2024-12-19 16:22:45',
-      type: 'lot'
-    },
-    {
-      id: '6',
-      user: 'Jean (Staff)',
-      action: 'Added Payment',
-      details: 'Recorded cash payment for Juan Cruz',
-      timestamp: '2024-12-19 15:10:12',
-      type: 'payment'
-    },
-    {
-      id: '7',
-      user: 'Sheree (Admin)',
-      action: 'Updated Settings',
-      details: 'Modified notification preferences',
-      timestamp: '2024-12-19 14:35:18',
-      type: 'system'
-    },
-    {
-      id: '8',
-      user: 'Jean (Staff)',
-      action: 'Scheduled Interment',
-      details: 'Scheduled interment for Carlos Rivera on 2024-12-25',
-      timestamp: '2024-12-19 13:22:55',
-      type: 'interment'
-    },
-    {
-      id: '9',
-      user: 'Sheree (Admin)',
-      action: 'Created User',
-      details: 'Added new staff member: Marie Gonzales',
-      timestamp: '2024-12-19 11:45:30',
-      type: 'user'
-    },
-    {
-      id: '10',
-      user: 'Jean (Staff)',
-      action: 'Updated Payment',
-      details: 'Modified payment status for lot A-003',
-      timestamp: '2024-12-19 10:20:15',
-      type: 'payment'
-    }
-  ];
+  // Form state for general settings
+  const [generalForm, setGeneralForm] = useState({
+    parkName: '',
+    contactEmail: '',
+    phone: '',
+    timezone: 'asia-manila',
+    address: '',
+    officeHours: '',
+    serviceHours: ''
+  });
 
+  // Form state for notifications
+  const [notificationsForm, setNotificationsForm] = useState({
+    emailPaymentReminders: true,
+    emailIntermentConfirmations: true,
+    emailNewClientRegistration: true,
+    systemDailyReports: true,
+    systemMaintenance: true,
+    systemLowInventory: false,
+    reminderDays: 7
+  });
+
+  // Form state for security
+  const [securityForm, setSecurityForm] = useState({
+    minLength: 8,
+    expiryDays: 90,
+    requireSpecialChars: true,
+    requireNumbers: true,
+    require2FA: false,
+    timeoutMinutes: 30,
+    maxLoginAttempts: 5
+  });
+
+  // Form state for system
+  const [systemForm, setSystemForm] = useState({
+    automaticBackups: true,
+    dataRetention: true,
+    backupTime: '02:00',
+    maintenanceMode: false,
+    debugMode: false
+  });
+
+  // Load settings and activity logs on mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Reload activity logs when filter changes
+  useEffect(() => {
+    loadActivityLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionFilter]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        loadSettings(),
+        loadActivityLogs()
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Failed to load settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const fetchedSettings = await fetchSettings();
+      if (fetchedSettings) {
+        setSettings(fetchedSettings);
+        
+        // Populate form states
+        setGeneralForm({
+          parkName: fetchedSettings.general.parkName,
+          contactEmail: fetchedSettings.general.contactEmail,
+          phone: fetchedSettings.general.phone,
+          timezone: fetchedSettings.general.timezone,
+          address: fetchedSettings.general.address,
+          officeHours: fetchedSettings.general.officeHours,
+          serviceHours: fetchedSettings.general.serviceHours
+        });
+
+        setNotificationsForm({
+          emailPaymentReminders: fetchedSettings.notifications.email.paymentReminders,
+          emailIntermentConfirmations: fetchedSettings.notifications.email.intermentConfirmations,
+          emailNewClientRegistration: fetchedSettings.notifications.email.newClientRegistration,
+          systemDailyReports: fetchedSettings.notifications.system.dailyReports,
+          systemMaintenance: fetchedSettings.notifications.system.systemMaintenance,
+          systemLowInventory: fetchedSettings.notifications.system.lowInventory,
+          reminderDays: fetchedSettings.notifications.reminderDays
+        });
+
+        setSecurityForm({
+          minLength: fetchedSettings.security.passwordPolicy.minLength,
+          expiryDays: fetchedSettings.security.passwordPolicy.expiryDays,
+          requireSpecialChars: fetchedSettings.security.passwordPolicy.requireSpecialChars,
+          requireNumbers: fetchedSettings.security.passwordPolicy.requireNumbers,
+          require2FA: fetchedSettings.security.passwordPolicy.require2FA,
+          timeoutMinutes: fetchedSettings.security.session.timeoutMinutes,
+          maxLoginAttempts: fetchedSettings.security.session.maxLoginAttempts
+        });
+
+        setSystemForm({
+          automaticBackups: fetchedSettings.system.database.automaticBackups,
+          dataRetention: fetchedSettings.system.database.dataRetention,
+          backupTime: fetchedSettings.system.database.backupTime,
+          maintenanceMode: fetchedSettings.system.maintenance.maintenanceMode,
+          debugMode: fetchedSettings.system.maintenance.debugMode
+        });
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      throw error;
+    }
+  };
+
+  const loadActivityLogs = async () => {
+    try {
+      const logs = await fetchActivityLogs({
+        type: actionFilter !== 'all' ? actionFilter : undefined,
+        limit: 100
+      });
+      setActivityLogs(logs);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error('Error loading activity logs:', error);
+      toast.error('Failed to load activity logs');
+    }
+  };
+
+  const handleSaveGeneral = async () => {
+    try {
+      await updateSettings({
+        general: {
+          parkName: generalForm.parkName,
+          contactEmail: generalForm.contactEmail,
+          phone: generalForm.phone,
+          timezone: generalForm.timezone,
+          address: generalForm.address,
+          officeHours: generalForm.officeHours,
+          serviceHours: generalForm.serviceHours
+        }
+      });
+      toast.success('General settings saved successfully');
+      await loadSettings();
+    } catch (error) {
+      console.error('Error saving general settings:', error);
+      toast.error('Failed to save general settings');
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    try {
+      await updateSettings({
+        notifications: {
+          email: {
+            paymentReminders: notificationsForm.emailPaymentReminders,
+            intermentConfirmations: notificationsForm.emailIntermentConfirmations,
+            newClientRegistration: notificationsForm.emailNewClientRegistration
+          },
+          system: {
+            dailyReports: notificationsForm.systemDailyReports,
+            systemMaintenance: notificationsForm.systemMaintenance,
+            lowInventory: notificationsForm.systemLowInventory
+          },
+          reminderDays: notificationsForm.reminderDays
+        }
+      });
+      toast.success('Notification settings saved successfully');
+      await loadSettings();
+    } catch (error) {
+      console.error('Error saving notification settings:', error);
+      toast.error('Failed to save notification settings');
+    }
+  };
+
+  const handleSaveSecurity = async () => {
+    try {
+      await updateSettings({
+        security: {
+          passwordPolicy: {
+            minLength: securityForm.minLength,
+            expiryDays: securityForm.expiryDays,
+            requireSpecialChars: securityForm.requireSpecialChars,
+            requireNumbers: securityForm.requireNumbers,
+            require2FA: securityForm.require2FA
+          },
+          session: {
+            timeoutMinutes: securityForm.timeoutMinutes,
+            maxLoginAttempts: securityForm.maxLoginAttempts
+          }
+        }
+      });
+      toast.success('Security settings updated successfully');
+      await loadSettings();
+    } catch (error) {
+      console.error('Error saving security settings:', error);
+      toast.error('Failed to save security settings');
+    }
+  };
+
+  const handleSaveSystem = async () => {
+    try {
+      await updateSettings({
+        system: {
+          ...settings?.system,
+          database: {
+            automaticBackups: systemForm.automaticBackups,
+            dataRetention: systemForm.dataRetention,
+            backupTime: systemForm.backupTime
+          },
+          maintenance: {
+            maintenanceMode: systemForm.maintenanceMode,
+            debugMode: systemForm.debugMode
+          }
+        }
+      });
+      toast.success('System settings saved successfully');
+      await loadSettings();
+    } catch (error) {
+      console.error('Error saving system settings:', error);
+      toast.error('Failed to save system settings');
+    }
+  };
+
+  const handleManualBackup = async () => {
+    try {
+      await triggerManualBackup();
+      toast.success('Manual backup initiated successfully');
+      await loadActivityLogs();
+    } catch (error) {
+      console.error('Error initiating backup:', error);
+      toast.error('Failed to initiate backup');
+    }
+  };
+
+  // Filter and paginate activity logs
   const filteredLogs = activityLogs.filter(log => {
     const matchesSearch = log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          log.details.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = actionFilter === 'all' || log.type === actionFilter;
-    return matchesSearch && matchesFilter;
+    return matchesSearch;
   });
 
   const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
@@ -140,25 +311,29 @@ export function SettingsPage() {
     }
   };
 
-  const handleSaveGeneral = () => {
-    toast.success('General settings saved successfully');
+  const formatTimestamp = (timestamp: Timestamp) => {
+    return timestamp.toDate().toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
   };
 
-  const handleSaveNotifications = () => {
-    toast.success('Notification settings saved successfully');
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleSaveSecurity = () => {
-    toast.success('Security settings updated successfully');
-  };
-
-  const handleSaveSystem = () => {
-    toast.success('System settings saved successfully');
-  };
-
-  const handleManualBackup = () => {
-    toast.success('Manual backup initiated successfully');
-  };
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -189,19 +364,35 @@ export function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="park-name">Memorial Park Name</Label>
-                  <Input id="park-name" defaultValue="Dumaguete Memorial Park" />
+                  <Input 
+                    id="park-name" 
+                    value={generalForm.parkName}
+                    onChange={(e) => setGeneralForm({ ...generalForm, parkName: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="contact-email">Contact Email</Label>
-                  <Input id="contact-email" type="email" defaultValue="info@dumaguetememorial.com" />
+                  <Input 
+                    id="contact-email" 
+                    type="email" 
+                    value={generalForm.contactEmail}
+                    onChange={(e) => setGeneralForm({ ...generalForm, contactEmail: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Contact Phone</Label>
-                  <Input id="phone" defaultValue="+63 35 225 1234" />
+                  <Input 
+                    id="phone" 
+                    value={generalForm.phone}
+                    onChange={(e) => setGeneralForm({ ...generalForm, phone: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="timezone">Timezone</Label>
-                  <Select defaultValue="asia-manila">
+                  <Select 
+                    value={generalForm.timezone}
+                    onValueChange={(value) => setGeneralForm({ ...generalForm, timezone: value })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -216,7 +407,8 @@ export function SettingsPage() {
                 <Label htmlFor="address">Address</Label>
                 <Textarea 
                   id="address" 
-                  defaultValue="123 Memorial Drive, Dumaguete City, Negros Oriental 6200, Philippines"
+                  value={generalForm.address}
+                  onChange={(e) => setGeneralForm({ ...generalForm, address: e.target.value })}
                   rows={3}
                 />
               </div>
@@ -225,11 +417,19 @@ export function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="office-hours">Office Hours</Label>
-                    <Input id="office-hours" defaultValue="8:00 AM - 5:00 PM" />
+                    <Input 
+                      id="office-hours" 
+                      value={generalForm.officeHours}
+                      onChange={(e) => setGeneralForm({ ...generalForm, officeHours: e.target.value })}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="service-hours">Service Hours</Label>
-                    <Input id="service-hours" defaultValue="7:00 AM - 6:00 PM" />
+                    <Input 
+                      id="service-hours" 
+                      value={generalForm.serviceHours}
+                      onChange={(e) => setGeneralForm({ ...generalForm, serviceHours: e.target.value })}
+                    />
                   </div>
                 </div>
               </div>
@@ -258,21 +458,30 @@ export function SettingsPage() {
                       <p className="font-medium">Payment Reminders</p>
                       <p className="text-sm text-muted-foreground">Send automatic payment reminder emails</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={notificationsForm.emailPaymentReminders}
+                      onCheckedChange={(checked) => setNotificationsForm({ ...notificationsForm, emailPaymentReminders: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Interment Confirmations</p>
                       <p className="text-sm text-muted-foreground">Send confirmation emails for scheduled services</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={notificationsForm.emailIntermentConfirmations}
+                      onCheckedChange={(checked) => setNotificationsForm({ ...notificationsForm, emailIntermentConfirmations: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">New Client Registration</p>
                       <p className="text-sm text-muted-foreground">Notify admin of new client registrations</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={notificationsForm.emailNewClientRegistration}
+                      onCheckedChange={(checked) => setNotificationsForm({ ...notificationsForm, emailNewClientRegistration: checked })}
+                    />
                   </div>
                 </div>
               </div>
@@ -285,28 +494,40 @@ export function SettingsPage() {
                       <p className="font-medium">Daily Reports</p>
                       <p className="text-sm text-muted-foreground">Receive daily operational reports</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={notificationsForm.systemDailyReports}
+                      onCheckedChange={(checked) => setNotificationsForm({ ...notificationsForm, systemDailyReports: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">System Maintenance</p>
                       <p className="text-sm text-muted-foreground">Alerts for system maintenance and updates</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={notificationsForm.systemMaintenance}
+                      onCheckedChange={(checked) => setNotificationsForm({ ...notificationsForm, systemMaintenance: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Low Inventory</p>
                       <p className="text-sm text-muted-foreground">Alert when lot availability is low</p>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={notificationsForm.systemLowInventory}
+                      onCheckedChange={(checked) => setNotificationsForm({ ...notificationsForm, systemLowInventory: checked })}
+                    />
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="reminder-days">Payment Reminder (days before due)</Label>
-                <Select defaultValue="7">
+                <Select 
+                  value={String(notificationsForm.reminderDays)}
+                  onValueChange={(value) => setNotificationsForm({ ...notificationsForm, reminderDays: parseInt(value) })}
+                >
                   <SelectTrigger className="w-32">
                     <SelectValue />
                   </SelectTrigger>
@@ -341,7 +562,10 @@ export function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="min-length">Minimum Password Length</Label>
-                    <Select defaultValue="8">
+                    <Select 
+                      value={String(securityForm.minLength)}
+                      onValueChange={(value) => setSecurityForm({ ...securityForm, minLength: parseInt(value) })}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -355,7 +579,10 @@ export function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password-expiry">Password Expiry (days)</Label>
-                    <Select defaultValue="90">
+                    <Select 
+                      value={String(securityForm.expiryDays)}
+                      onValueChange={(value) => setSecurityForm({ ...securityForm, expiryDays: value === 'never' ? 0 : parseInt(value) })}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -374,21 +601,30 @@ export function SettingsPage() {
                       <p className="font-medium">Require Special Characters</p>
                       <p className="text-sm text-muted-foreground">Password must contain special characters</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={securityForm.requireSpecialChars}
+                      onCheckedChange={(checked) => setSecurityForm({ ...securityForm, requireSpecialChars: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Require Numbers</p>
                       <p className="text-sm text-muted-foreground">Password must contain numbers</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={securityForm.requireNumbers}
+                      onCheckedChange={(checked) => setSecurityForm({ ...securityForm, requireNumbers: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Two-Factor Authentication</p>
                       <p className="text-sm text-muted-foreground">Require 2FA for admin accounts</p>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={securityForm.require2FA}
+                      onCheckedChange={(checked) => setSecurityForm({ ...securityForm, require2FA: checked })}
+                    />
                   </div>
                 </div>
               </div>
@@ -398,7 +634,10 @@ export function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="session-timeout">Session Timeout (minutes)</Label>
-                    <Select defaultValue="30">
+                    <Select 
+                      value={String(securityForm.timeoutMinutes)}
+                      onValueChange={(value) => setSecurityForm({ ...securityForm, timeoutMinutes: parseInt(value) })}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -412,7 +651,10 @@ export function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="max-attempts">Max Login Attempts</Label>
-                    <Select defaultValue="5">
+                    <Select 
+                      value={String(securityForm.maxLoginAttempts)}
+                      onValueChange={(value) => setSecurityForm({ ...securityForm, maxLoginAttempts: parseInt(value) })}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -451,19 +693,31 @@ export function SettingsPage() {
                       <p className="font-medium">Automatic Backups</p>
                       <p className="text-sm text-muted-foreground">Daily automated database backups</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={systemForm.automaticBackups}
+                      onCheckedChange={(checked) => setSystemForm({ ...systemForm, automaticBackups: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Data Retention</p>
                       <p className="text-sm text-muted-foreground">Keep logs for compliance</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={systemForm.dataRetention}
+                      onCheckedChange={(checked) => setSystemForm({ ...systemForm, dataRetention: checked })}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="backup-time">Backup Time</Label>
-                  <Input id="backup-time" type="time" defaultValue="02:00" className="w-32" />
+                  <Input 
+                    id="backup-time" 
+                    type="time" 
+                    value={systemForm.backupTime}
+                    onChange={(e) => setSystemForm({ ...systemForm, backupTime: e.target.value })}
+                    className="w-32" 
+                  />
                 </div>
                 <Button variant="outline" onClick={handleManualBackup}>Run Manual Backup</Button>
               </div>
@@ -476,14 +730,20 @@ export function SettingsPage() {
                       <p className="font-medium">Maintenance Mode</p>
                       <p className="text-sm text-muted-foreground">Enable maintenance mode for updates</p>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={systemForm.maintenanceMode}
+                      onCheckedChange={(checked) => setSystemForm({ ...systemForm, maintenanceMode: checked })}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Debug Mode</p>
                       <p className="text-sm text-muted-foreground">Enable detailed error logging</p>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={systemForm.debugMode}
+                      onCheckedChange={(checked) => setSystemForm({ ...systemForm, debugMode: checked })}
+                    />
                   </div>
                 </div>
               </div>
@@ -493,19 +753,19 @@ export function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">Version:</p>
-                    <p className="font-medium">v2.1.4</p>
+                    <p className="font-medium">{settings?.system.info.version}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Last Updated:</p>
-                    <p className="font-medium">December 10, 2024</p>
+                    <p className="font-medium">{settings?.system.info.lastUpdated}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Database Size:</p>
-                    <p className="font-medium">245 MB</p>
+                    <p className="font-medium">{settings?.system.info.databaseSize}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Active Users:</p>
-                    <p className="font-medium">12</p>
+                    <p className="font-medium">{settings?.system.info.activeUsers}</p>
                   </div>
                 </div>
               </div>
@@ -591,7 +851,7 @@ export function SettingsPage() {
                             {log.details}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {log.timestamp}
+                            {formatTimestamp(log.timestamp)}
                           </TableCell>
                           <TableCell>
                             <Badge className={getActionColor(log.type)}>

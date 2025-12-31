@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, MapPin, Eye } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -7,30 +7,82 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { db } from '../../firebase';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+
+type LotStatus = 'available' | 'assigned' | 'occupied' | 'maintenance';
+
+type Lot = {
+  id: string;
+  lotNumber: string;  // ADDED: The actual lot number like "A-001"
+  section: string;
+  status: LotStatus;
+  price: number;
+  size: string;
+  location: string;
+  description: string;
+  client?: string;
+  clientId?: string;
+  assignedDate?: Date;
+  occupiedDate?: Date;
+};
 
 export function StaffLots() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sectionFilter, setSectionFilter] = useState('all');
+  const [lots, setLots] = useState<Lot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const lots = [
-    { id: 'A-001', section: 'A', status: 'available', price: 45000, size: '2x3m', location: 'Garden Section', description: 'Peaceful garden setting with mature trees' },
-    { id: 'A-002', section: 'A', status: 'assigned', price: 45000, size: '2x3m', location: 'Garden Section', client: 'Maria Santos', description: 'Peaceful garden setting with mature trees' },
-    { id: 'A-003', section: 'A', status: 'occupied', price: 45000, size: '2x3m', location: 'Garden Section', client: 'Juan Cruz', description: 'Peaceful garden setting with mature trees' },
-    { id: 'B-001', section: 'B', status: 'available', price: 55000, size: '3x3m', location: 'Premium Section', description: 'Premium location with excellent accessibility' },
-    { id: 'B-002', section: 'B', status: 'assigned', price: 55000, size: '3x3m', location: 'Premium Section', client: 'Pedro Garcia', description: 'Premium location with excellent accessibility' },
-    { id: 'B-003', section: 'B', status: 'occupied', price: 55000, size: '3x3m', location: 'Premium Section', client: 'Ana Lopez', description: 'Premium location with excellent accessibility' },
-    { id: 'C-001', section: 'C', status: 'available', price: 35000, size: '2x2m', location: 'Standard Section', description: 'Well-maintained standard burial plot' },
-    { id: 'C-002', section: 'C', status: 'available', price: 35000, size: '2x2m', location: 'Standard Section', description: 'Well-maintained standard burial plot' },
-    { id: 'C-003', section: 'C', status: 'maintenance', price: 35000, size: '2x2m', location: 'Standard Section', description: 'Well-maintained standard burial plot' },
-    { id: 'D-001', section: 'D', status: 'available', price: 65000, size: '3x4m', location: 'Memorial Garden', description: 'Exclusive memorial garden with water features' },
-    { id: 'D-002', section: 'D', status: 'assigned', price: 65000, size: '3x4m', location: 'Memorial Garden', client: 'Rosa Garcia', description: 'Exclusive memorial garden with water features' },
-  ];
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
 
-  const filteredLots = lots.filter(lot => {
-    const matchesSearch = lot.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         lot.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (lot.client && lot.client.toLowerCase().includes(searchTerm.toLowerCase()));
+    // Query lots collection from Firestore
+    const lotsQuery = query(
+      collection(db, 'lots'),
+      orderBy('section', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(
+      lotsQuery,
+      (snapshot) => {
+        const lotsData: Lot[] = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            lotNumber: data.id || doc.id,  // FIXED: Use data.id (lot number from admin) or fallback to doc.id
+            section: data.section || '',
+            status: data.status || 'available',
+            price: data.price || 0,
+            size: data.size || '',
+            location: data.location || '',
+            description: data.description || '',
+            client: data.client || undefined,
+            clientId: data.clientId || undefined,
+            assignedDate: data.assignedDate?.toDate() || undefined,
+            occupiedDate: data.occupiedDate?.toDate() || undefined,
+          };
+        });
+        setLots(lotsData);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching lots:', err);
+        setError(err.message);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const filteredLots = lots.filter((lot) => {
+    const matchesSearch =
+      lot.lotNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||  // FIXED: Search by lotNumber instead of id
+      lot.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (lot.client && lot.client.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || lot.status === statusFilter;
     const matchesSection = sectionFilter === 'all' || lot.section === sectionFilter;
     return matchesSearch && matchesStatus && matchesSection;
@@ -38,11 +90,16 @@ export function StaffLots() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'available': return 'bg-green-100 text-green-800';
-      case 'assigned': return 'bg-yellow-100 text-yellow-800';
-      case 'occupied': return 'bg-red-100 text-red-800';
-      case 'maintenance': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'available':
+        return 'bg-green-100 text-green-800';
+      case 'assigned':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'occupied':
+        return 'bg-red-100 text-red-800';
+      case 'maintenance':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -61,6 +118,22 @@ export function StaffLots() {
   };
 
   const sectionStats = getSectionStats();
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Loading lots information...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-destructive">Error loading lots: {error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -122,10 +195,11 @@ export function StaffLots() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sections</SelectItem>
-                <SelectItem value="A">Section A</SelectItem>
-                <SelectItem value="B">Section B</SelectItem>
-                <SelectItem value="C">Section C</SelectItem>
-                <SelectItem value="D">Section D</SelectItem>
+                {Array.from(new Set(lots.map((lot) => lot.section))).map((section) => (
+                  <SelectItem key={section} value={section}>
+                    Section {section}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -157,87 +231,111 @@ export function StaffLots() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLots.map((lot) => (
-                  <TableRow key={lot.id}>
-                    <TableCell className="font-medium">{lot.id}</TableCell>
-                    <TableCell>{lot.location}</TableCell>
-                    <TableCell>{lot.size}</TableCell>
-                    <TableCell>₱{lot.price.toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(lot.status)}>
-                        {lot.status.charAt(0).toUpperCase() + lot.status.slice(1)}
-                      </Badge>
+                {filteredLots.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      No lots found
                     </TableCell>
-                    <TableCell>{lot.client || '-'}</TableCell>
-                    <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Lot Details - {lot.id}</DialogTitle>
-                            <DialogDescription>Detailed information for this burial lot</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-muted-foreground">Location</p>
-                                <p className="font-medium">{lot.location}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Section</p>
-                                <p className="font-medium">Section {lot.section}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Size</p>
-                                <p className="font-medium">{lot.size}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Price</p>
-                                <p className="font-medium">₱{lot.price.toLocaleString()}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Status</p>
-                                <Badge className={getStatusColor(lot.status)}>
-                                  {lot.status.charAt(0).toUpperCase() + lot.status.slice(1)}
-                                </Badge>
-                              </div>
-                              {lot.client && (
+                  </TableRow>
+                ) : (
+                  filteredLots.map((lot) => (
+                    <TableRow key={lot.id}>
+                      <TableCell className="font-medium">{lot.lotNumber}</TableCell>  {/* FIXED: Display lotNumber instead of id */}
+                      <TableCell>{lot.location}</TableCell>
+                      <TableCell>{lot.size}</TableCell>
+                      <TableCell>₱{lot.price.toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(lot.status)}>
+                          {lot.status.charAt(0).toUpperCase() + lot.status.slice(1)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{lot.client || '-'}</TableCell>
+                      <TableCell>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Lot Details - {lot.lotNumber}</DialogTitle>  {/* FIXED: Display lotNumber */}
+                              <DialogDescription>Detailed information for this burial lot</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <p className="text-sm text-muted-foreground">Assigned to</p>
-                                  <p className="font-medium">{lot.client}</p>
+                                  <p className="text-sm text-muted-foreground">Lot Number</p>  {/* ADDED: Show lot number */}
+                                  <p className="font-medium">{lot.lotNumber}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Location</p>
+                                  <p className="font-medium">{lot.location}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Section</p>
+                                  <p className="font-medium">Section {lot.section}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Size</p>
+                                  <p className="font-medium">{lot.size}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Price</p>
+                                  <p className="font-medium">₱{lot.price.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Status</p>
+                                  <Badge className={getStatusColor(lot.status)}>
+                                    {lot.status.charAt(0).toUpperCase() + lot.status.slice(1)}
+                                  </Badge>
+                                </div>
+                                {lot.client && (
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Assigned to</p>
+                                    <p className="font-medium">{lot.client}</p>
+                                  </div>
+                                )}
+                                {lot.assignedDate && (
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Assigned Date</p>
+                                    <p className="font-medium">{lot.assignedDate.toLocaleDateString()}</p>
+                                  </div>
+                                )}
+                                {lot.occupiedDate && (
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Occupied Date</p>
+                                    <p className="font-medium">{lot.occupiedDate.toLocaleDateString()}</p>
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Description</p>
+                                <p className="font-medium">{lot.description}</p>
+                              </div>
+
+                              {lot.status === 'available' && (
+                                <div className="mt-4 p-3 bg-green-50 rounded-md">
+                                  <p className="text-sm text-green-800">
+                                    This lot is available for reservation. Contact admin for booking procedures.
+                                  </p>
+                                </div>
+                              )}
+
+                              {lot.status === 'maintenance' && (
+                                <div className="mt-4 p-3 bg-yellow-50 rounded-md">
+                                  <p className="text-sm text-yellow-800">
+                                    This lot is currently under maintenance. Expected completion: TBD
+                                  </p>
                                 </div>
                               )}
                             </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Description</p>
-                              <p className="font-medium">{lot.description}</p>
-                            </div>
-                            
-                            {lot.status === 'available' && (
-                              <div className="mt-4 p-3 bg-green-50 rounded-md">
-                                <p className="text-sm text-green-800">
-                                  This lot is available for reservation. Contact admin for booking procedures.
-                                </p>
-                              </div>
-                            )}
-                            
-                            {lot.status === 'maintenance' && (
-                              <div className="mt-4 p-3 bg-yellow-50 rounded-md">
-                                <p className="text-sm text-yellow-800">
-                                  This lot is currently under maintenance. Expected completion: TBD
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          </DialogContent>
+                        </Dialog>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

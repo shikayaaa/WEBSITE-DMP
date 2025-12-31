@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, DollarSign, Users, MapPin, Download, Filter, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -6,79 +6,316 @@ import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { toast } from 'sonner';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { db } from '../../firebase';
+
+interface MonthlyData {
+  month: string;
+  revenue: number;
+  lots: number;
+}
+
+interface LotStatusData {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface PaymentTrend {
+  month: string;
+  paid: number;
+  pending: number;
+}
+
+interface IntermentData {
+  month: string;
+  interments: number;
+}
+
+interface InstallmentData {
+  plan: string;
+  contracts: number;
+  revenue: number;
+}
+
+interface LotTypeRevenue {
+  type: string;
+  sold: number;
+  revenue: number;
+}
 
 export function ReportsAnalytics() {
   const [installmentFilter, setInstallmentFilter] = useState('all');
   const [lotTypeFilter, setLotTypeFilter] = useState('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
-  const [dateRange, setDateRange] = useState('2024');
-  const monthlyRevenue = [
-    { month: 'Jan', revenue: 1800000, lots: 35 },
-    { month: 'Feb', revenue: 2100000, lots: 42 },
-    { month: 'Mar', revenue: 1950000, lots: 38 },
-    { month: 'Apr', revenue: 2250000, lots: 45 },
-    { month: 'May', revenue: 2400000, lots: 48 },
-    { month: 'Jun', revenue: 2150000, lots: 43 },
-    { month: 'Jul', revenue: 2300000, lots: 46 },
-    { month: 'Aug', revenue: 2100000, lots: 42 },
-    { month: 'Sep', revenue: 2450000, lots: 49 },
-    { month: 'Oct', revenue: 2600000, lots: 52 },
-    { month: 'Nov', revenue: 2350000, lots: 47 },
-    { month: 'Dec', revenue: 2100000, lots: 42 },
-  ];
+  const [dateRange, setDateRange] = useState('2025');
+  const [isLoading, setIsLoading] = useState(true);
 
-  const lotStatusData = [
-    { name: 'Available', value: 391, color: '#22c55e' },
-    { name: 'Reserved', value: 125, color: '#eab308' },
-    { name: 'Sold', value: 731, color: '#ef4444' },
-  ];
+  // State for data
+  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyData[]>([]);
+  const [lotStatusData, setLotStatusData] = useState<LotStatusData[]>([]);
+  const [paymentTrends, setPaymentTrends] = useState<PaymentTrend[]>([]);
+  const [intermentData, setIntermentData] = useState<IntermentData[]>([]);
+  const [installmentData, setInstallmentData] = useState<InstallmentData[]>([]);
+  const [lotTypeRevenue, setLotTypeRevenue] = useState<LotTypeRevenue[]>([]);
 
-  const paymentTrends = [
-    { month: 'Jan', paid: 85, pending: 15 },
-    { month: 'Feb', paid: 88, pending: 12 },
-    { month: 'Mar', paid: 82, pending: 18 },
-    { month: 'Apr', paid: 90, pending: 10 },
-    { month: 'May', paid: 92, pending: 8 },
-    { month: 'Jun', paid: 87, pending: 13 },
-    { month: 'Jul', paid: 89, pending: 11 },
-    { month: 'Aug', paid: 91, pending: 9 },
-    { month: 'Sep', paid: 86, pending: 14 },
-    { month: 'Oct', paid: 93, pending: 7 },
-    { month: 'Nov', paid: 88, pending: 12 },
-    { month: 'Dec', paid: 85, pending: 15 },
-  ];
+  // KPI Stats
+  const [annualRevenue, setAnnualRevenue] = useState(0);
+  const [lotsSold, setLotsSold] = useState(0);
+  const [activeClients, setActiveClients] = useState(0);
+  const [avgMonthlyRevenue, setAvgMonthlyRevenue] = useState(0);
 
-  const intermentData = [
-    { month: 'Jan', interments: 28 },
-    { month: 'Feb', interments: 32 },
-    { month: 'Mar', interments: 25 },
-    { month: 'Apr', interments: 35 },
-    { month: 'May', interments: 38 },
-    { month: 'Jun', interments: 31 },
-    { month: 'Jul', interments: 34 },
-    { month: 'Aug', interments: 29 },
-    { month: 'Sep', interments: 37 },
-    { month: 'Oct', interments: 41 },
-    { month: 'Nov', interments: 33 },
-    { month: 'Dec', interments: 30 },
-  ];
+  useEffect(() => {
+    loadAnalyticsData();
+  }, [dateRange, installmentFilter, lotTypeFilter, paymentStatusFilter]);
 
-  const installmentData = [
-    { plan: '12 months', contracts: 85, revenue: 15200000 },
-    { plan: '36 months', contracts: 142, revenue: 28400000 },
-    { plan: '60 months', contracts: 97, revenue: 24100000 },
-  ];
+  const loadAnalyticsData = async () => {
+    try {
+      setIsLoading(true);
 
-  const lotTypeRevenue = [
-    { type: 'Lawn Area', sold: 245, revenue: 17500000 },
-    { type: 'Memorial Garden', sold: 89, revenue: 34800000 },
-    { type: 'Garden Family Estate', sold: 34, revenue: 28900000 },
-    { type: 'Family Estate', sold: 12, revenue: 23100000 },
-  ];
+      // Load Pre-Need Agreements
+      const preNeedQuery = query(collection(db, 'preNeedAgreements'));
+      const preNeedSnapshot = await getDocs(preNeedQuery);
+
+      // Load Payments
+      const paymentsQuery = query(collection(db, 'payments'));
+      const paymentsSnapshot = await getDocs(paymentsQuery);
+
+      // Load Interment Requests
+      const intermentQuery = query(collection(db, 'interment_requests'));
+      const intermentSnapshot = await getDocs(intermentQuery);
+
+      // Process Pre-Need Data with filters
+      let preNeedPlans = preNeedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Filter by selected year
+      const selectedYear = parseInt(dateRange);
+      preNeedPlans = preNeedPlans.filter((plan: any) => {
+        if (!plan.startDate) return false;
+        const planDate = plan.startDate.toDate ? plan.startDate.toDate() : new Date(plan.startDate);
+        return planDate.getFullYear() === selectedYear;
+      });
+
+      // Apply installment filter
+      if (installmentFilter !== 'all') {
+        const filterMonths = parseInt(installmentFilter);
+        preNeedPlans = preNeedPlans.filter((plan: any) => plan.termMonths === filterMonths);
+      }
+
+      // Apply lot type filter
+      if (lotTypeFilter !== 'all') {
+        preNeedPlans = preNeedPlans.filter((plan: any) => {
+          const lotType = plan.lotType?.toLowerCase() || '';
+          return lotType.includes(lotTypeFilter);
+        });
+      }
+
+      // Apply payment status filter
+      if (paymentStatusFilter !== 'all') {
+        preNeedPlans = preNeedPlans.filter((plan: any) => {
+          if (paymentStatusFilter === 'paid') {
+            return plan.remainingBalance === 0;
+          } else if (paymentStatusFilter === 'partial') {
+            return plan.remainingBalance > 0 && plan.remainingBalance < plan.totalAmount;
+          } else if (paymentStatusFilter === 'pending') {
+            return plan.remainingBalance === plan.totalAmount;
+          } else if (paymentStatusFilter === 'overdue') {
+            return plan.status === 'overdue';
+          }
+          return true;
+        });
+      }
+      
+      // Calculate KPIs
+      const totalRevenue = preNeedPlans.reduce((sum: number, plan: any) => 
+        sum + ((plan.totalAmount || 0) - (plan.remainingBalance || 0)), 0
+      );
+      const totalSold = preNeedPlans.filter((plan: any) => 
+        plan.status === 'completed' || plan.status === 'active'
+      ).length;
+      const totalActive = preNeedPlans.filter((plan: any) => plan.status === 'active').length;
+      
+      setAnnualRevenue(totalRevenue);
+      setLotsSold(totalSold);
+      setActiveClients(totalActive);
+      setAvgMonthlyRevenue(totalRevenue / 12);
+
+      // Process Monthly Revenue
+      const monthlyData = processMonthlyRevenue(preNeedPlans, selectedYear);
+      setMonthlyRevenue(monthlyData);
+
+      // Process Lot Status
+      const lotStatus = processLotStatus(preNeedPlans);
+      setLotStatusData(lotStatus);
+
+      // Process Payment Trends
+      const paymentData = processPaymentTrends(paymentsSnapshot.docs, selectedYear);
+      setPaymentTrends(paymentData);
+
+      // Process Interment Data
+      const intermentInfo = processIntermentData(intermentSnapshot.docs, selectedYear);
+      setIntermentData(intermentInfo);
+
+      // Process Installment Data
+      const installmentInfo = processInstallmentData(preNeedPlans);
+      setInstallmentData(installmentInfo);
+
+      // Process Lot Type Revenue
+      const lotTypeInfo = processLotTypeRevenue(preNeedPlans);
+      setLotTypeRevenue(lotTypeInfo);
+
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+      alert('❌ Error loading analytics data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const processMonthlyRevenue = (plans: any[], year: number): MonthlyData[] => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyData: MonthlyData[] = [];
+
+    months.forEach((month, index) => {
+      const monthPlans = plans.filter((plan: any) => {
+        if (!plan.startDate) return false;
+        const planDate = plan.startDate.toDate ? plan.startDate.toDate() : new Date(plan.startDate);
+        return planDate.getMonth() === index && planDate.getFullYear() === year;
+      });
+
+      const revenue = monthPlans.reduce((sum: number, plan: any) => 
+        sum + ((plan.totalAmount || 0) - (plan.remainingBalance || 0)), 0
+      );
+
+      monthlyData.push({
+        month,
+        revenue,
+        lots: monthPlans.length
+      });
+    });
+
+    return monthlyData;
+  };
+
+  const processLotStatus = (plans: any[]): LotStatusData[] => {
+    const active = plans.filter((p: any) => p.status === 'active').length;
+    const completed = plans.filter((p: any) => p.status === 'completed').length;
+    const pending = plans.filter((p: any) => 
+      p.status === 'overdue' || p.status === 'cancelled' || p.status === 'pending'
+    ).length;
+
+    return [
+      { name: 'Active', value: active, color: '#22c55e' },
+      { name: 'Completed', value: completed, color: '#3b82f6' },
+      { name: 'Pending/Overdue', value: pending, color: '#eab308' },
+    ];
+  };
+
+  const processPaymentTrends = (payments: any[], year: number): PaymentTrend[] => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const trends: PaymentTrend[] = [];
+
+    months.forEach((month, index) => {
+      const monthPayments = payments.filter((payment: any) => {
+        const doc = payment.data();
+        if (!doc.date && !doc.createdAt) return false;
+        const paymentDate = doc.date?.toDate ? doc.date.toDate() : 
+                           doc.createdAt?.toDate ? doc.createdAt.toDate() : 
+                           new Date(doc.date || doc.createdAt);
+        return paymentDate.getMonth() === index && paymentDate.getFullYear() === year;
+      });
+
+      const totalPayments = monthPayments.length;
+      const paidPayments = monthPayments.filter((p: any) => {
+        const data = p.data();
+        return data.status === 'paid' || data.status === 'completed';
+      }).length;
+      const pendingPayments = totalPayments - paidPayments;
+
+      trends.push({
+        month,
+        paid: totalPayments > 0 ? Math.round((paidPayments / totalPayments) * 100) : 0,
+        pending: totalPayments > 0 ? Math.round((pendingPayments / totalPayments) * 100) : 0
+      });
+    });
+
+    return trends;
+  };
+
+  const processIntermentData = (interments: any[], year: number): IntermentData[] => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const data: IntermentData[] = [];
+
+    months.forEach((month, index) => {
+      const monthInterments = interments.filter((interment: any) => {
+        const doc = interment.data();
+        if (!doc.createdAt && !doc.intermentDate) return false;
+        const intermentDate = doc.intermentDate?.toDate ? doc.intermentDate.toDate() : 
+                             doc.createdAt?.toDate ? doc.createdAt.toDate() : 
+                             new Date(doc.intermentDate || doc.createdAt);
+        return intermentDate.getMonth() === index && intermentDate.getFullYear() === year;
+      });
+
+      data.push({
+        month,
+        interments: monthInterments.length
+      });
+    });
+
+    return data;
+  };
+
+  const processInstallmentData = (plans: any[]): InstallmentData[] => {
+    const installmentPlans = ['12 months', '36 months', '60 months'];
+    const data: InstallmentData[] = [];
+
+    installmentPlans.forEach(plan => {
+      const planMonths = parseInt(plan);
+      const planContracts = plans.filter((p: any) => p.termMonths === planMonths);
+      const revenue = planContracts.reduce((sum: number, p: any) => 
+        sum + (p.totalAmount || 0), 0
+      );
+
+      data.push({
+        plan,
+        contracts: planContracts.length,
+        revenue
+      });
+    });
+
+    return data;
+  };
+
+  const processLotTypeRevenue = (plans: any[]): LotTypeRevenue[] => {
+    const lotTypes = [
+      'Basic Package', 
+      'Standard Package', 
+      'Deluxe Memorial Package', 
+      'Premium Memorial Package', 
+      'Family Package'
+    ];
+    const data: LotTypeRevenue[] = [];
+
+    lotTypes.forEach(type => {
+      const typePlans = plans.filter((p: any) => p.planType === type);
+      const revenue = typePlans.reduce((sum: number, p: any) => 
+        sum + ((p.totalAmount || 0) - (p.remainingBalance || 0)), 0
+      );
+
+      if (typePlans.length > 0) {
+        data.push({
+          type,
+          sold: typePlans.length,
+          revenue
+        });
+      }
+    });
+
+    return data;
+  };
 
   const handleExportPDF = () => {
-    toast.success('Exporting report as PDF...');
+    alert('✅ Exporting report as PDF...');
   };
 
   const getActiveFiltersCount = () => {
@@ -89,12 +326,23 @@ export function ReportsAnalytics() {
     return count;
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading analytics data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold">Reports & Analytics</h2>
-          <p className="text-muted-foreground">Financial and operational insights</p>
+          <p className="text-gray-600">Financial and operational insights for {dateRange}</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={dateRange} onValueChange={setDateRange}>
@@ -102,15 +350,15 @@ export function ReportsAnalytics() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="2025">2025</SelectItem>
               <SelectItem value="2024">2024</SelectItem>
               <SelectItem value="2023">2023</SelectItem>
               <SelectItem value="2022">2022</SelectItem>
+              <SelectItem value="2021">2021</SelectItem>
+              <SelectItem value="2020">2020</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={handleExportPDF}>
-            <Download className="h-4 w-4 mr-2" />
-            Export PDF
-          </Button>
+         
         </div>
       </div>
 
@@ -195,9 +443,13 @@ export function ReportsAnalytics() {
             <div className="flex items-center space-x-2">
               <DollarSign className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Annual Revenue</p>
-                <p className="text-2xl font-bold text-green-600">₱27.1M</p>
-                <p className="text-xs text-green-600">+12% from last year</p>
+                <p className="text-sm text-gray-600">Annual Revenue</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ₱{annualRevenue >= 1000000 
+                    ? (annualRevenue / 1000000).toFixed(1) + 'M' 
+                    : (annualRevenue / 1000).toFixed(0) + 'K'}
+                </p>
+                <p className="text-xs text-green-600">From pre-need plans</p>
               </div>
             </div>
           </CardContent>
@@ -207,9 +459,9 @@ export function ReportsAnalytics() {
             <div className="flex items-center space-x-2">
               <MapPin className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Lots Sold</p>
-                <p className="text-2xl font-bold text-blue-600">731</p>
-                <p className="text-xs text-blue-600">58% occupancy</p>
+                <p className="text-sm text-gray-600">Lots Sold</p>
+                <p className="text-2xl font-bold text-blue-600">{lotsSold}</p>
+                <p className="text-xs text-blue-600">Active & completed</p>
               </div>
             </div>
           </CardContent>
@@ -219,9 +471,9 @@ export function ReportsAnalytics() {
             <div className="flex items-center space-x-2">
               <Users className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Active Clients</p>
-                <p className="text-2xl font-bold text-purple-600">856</p>
-                <p className="text-xs text-purple-600">+5% this month</p>
+                <p className="text-sm text-gray-600">Active Clients</p>
+                <p className="text-2xl font-bold text-purple-600">{activeClients}</p>
+                <p className="text-xs text-purple-600">Current contracts</p>
               </div>
             </div>
           </CardContent>
@@ -231,9 +483,13 @@ export function ReportsAnalytics() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-5 w-5 text-orange-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Avg. Monthly Revenue</p>
-                <p className="text-2xl font-bold text-orange-600">₱2.26M</p>
-                <p className="text-xs text-orange-600">+8% trend</p>
+                <p className="text-sm text-gray-600">Avg. Monthly Revenue</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  ₱{avgMonthlyRevenue >= 1000000 
+                    ? (avgMonthlyRevenue / 1000000).toFixed(2) + 'M' 
+                    : (avgMonthlyRevenue / 1000).toFixed(0) + 'K'}
+                </p>
+                <p className="text-xs text-orange-600">Estimated average</p>
               </div>
             </div>
           </CardContent>
@@ -281,7 +537,7 @@ export function ReportsAnalytics() {
                     <YAxis yAxisId="right" orientation="right" />
                     <Tooltip />
                     <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} />
-                    <Line yAxisId="right" type="monotone" dataKey="lots" stroke="#2196F3" strokeWidth={2} />
+                    <Line yAxisId="right" type="monotone" dataKey="lots" stroke="#10b981" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -328,7 +584,7 @@ export function ReportsAnalytics() {
                     <XAxis dataKey="month" />
                     <YAxis />
                     <Tooltip />
-                    <Bar dataKey="lots" fill="#2196F3" />
+                    <Bar dataKey="lots" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -348,7 +604,7 @@ export function ReportsAnalytics() {
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="paid" stackId="a" fill="#2196F3" name="Paid %" />
+                  <Bar dataKey="paid" stackId="a" fill="#10b981" name="Paid %" />
                   <Bar dataKey="pending" stackId="a" fill="#f59e0b" name="Pending %" />
                 </BarChart>
               </ResponsiveContainer>
@@ -376,7 +632,7 @@ export function ReportsAnalytics() {
                       ]}
                     />
                     <Bar yAxisId="left" dataKey="contracts" fill="#3b82f6" name="contracts" />
-                    <Bar yAxisId="right" dataKey="revenue" fill="#2196F3" name="revenue" />
+                    <Bar yAxisId="right" dataKey="revenue" fill="#10b981" name="revenue" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -399,7 +655,7 @@ export function ReportsAnalytics() {
                       label={({ type, percent }) => `${type} ${(percent * 100).toFixed(0)}%`}
                     >
                       {lotTypeRevenue.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444'][index]} />
+                        <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value) => [`₱${(Number(value) / 1000000).toFixed(2)}M`, 'Revenue']} />
@@ -423,7 +679,6 @@ export function ReportsAnalytics() {
                       <th className="text-right p-2">Contracts</th>
                       <th className="text-right p-2">Revenue</th>
                       <th className="text-right p-2">Avg. Contract Value</th>
-                      <th className="text-right p-2">Success Rate</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -432,11 +687,8 @@ export function ReportsAnalytics() {
                         <td className="p-2 font-medium">{plan.plan}</td>
                         <td className="p-2 text-right">{plan.contracts}</td>
                         <td className="p-2 text-right">₱{(plan.revenue / 1000000).toFixed(2)}M</td>
-                        <td className="p-2 text-right">₱{(plan.revenue / plan.contracts / 1000).toFixed(0)}K</td>
                         <td className="p-2 text-right">
-                          <Badge variant="outline" className="bg-green-50 text-green-700">
-                            {Math.floor(Math.random() * 15) + 85}%
-                          </Badge>
+                          {plan.contracts > 0 ? `₱${(plan.revenue / plan.contracts / 1000).toFixed(0)}K` : 'N/A'}
                         </td>
                       </tr>
                     ))}

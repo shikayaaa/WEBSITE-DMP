@@ -15,6 +15,10 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
+import { signOut } from 'firebase/auth';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../firebase';
+import { toast } from 'sonner';
 import logoImage from '../assets/dmplogofinal.png';
 
 interface SidebarProps {
@@ -50,6 +54,35 @@ export function Sidebar({ userRole, currentPage, onPageChange, onLogout }: Sideb
   ];
 
   const menuItems = userRole === 'admin' ? adminMenuItems : staffMenuItems;
+
+  const handleLogout = async () => {
+    try {
+      const user = auth.currentUser;
+      
+      if (user) {
+        // Update user document with logout timestamp
+        try {
+          await updateDoc(doc(db, 'users', user.uid), {
+            lastLogout: serverTimestamp(),
+            lastActive: serverTimestamp(),
+          });
+        } catch (updateError) {
+          console.error('Error updating logout timestamp:', updateError);
+        }
+      }
+
+      // Sign out from Firebase
+      await signOut(auth);
+      
+      toast.success('Logged out successfully');
+      
+      // Call parent onLogout
+      onLogout();
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      toast.error('Logout failed: ' + (error.message || 'Unknown error'));
+    }
+  };
 
   return (
     <div className="w-64 sidebar-3d border-0 h-screen flex flex-col relative">
@@ -101,7 +134,7 @@ export function Sidebar({ userRole, currentPage, onPageChange, onLogout }: Sideb
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/20 transition-all duration-200"
-          onClick={onLogout}
+          onClick={handleLogout}
         >
           <div className="p-1.5 rounded-lg">
             <LogOut className="h-4 w-4" />

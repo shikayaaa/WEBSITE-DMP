@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, Filter, Eye, FileText, DollarSign, ChevronLeft, ChevronRight, Plus, History, User, MapPin, Calendar, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Eye, DollarSign, ChevronLeft, ChevronRight, Plus, History, User, MapPin, Calendar, Download, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -7,11 +7,67 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { ContractGenerator } from './ContractGenerator';
-import { PaymentHistoryModal } from './PaymentHistoryModal';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Separator } from '../ui/separator';
 import { toast } from 'sonner';
+import { 
+  collection, 
+  query, 
+  getDocs, 
+  doc, 
+  getDoc,
+  where,
+  orderBy,
+  Timestamp,
+} from 'firebase/firestore';
+import { db } from '../../firebase';
+
+interface Payment {
+  id: string;
+  client: string;
+  clientId: string;
+  lot: string;
+  amount: number;
+  paid: number;
+  due: number;
+  dueDate: string;
+  status: string;
+  contractId: string;
+}
+
+interface Contract {
+  id: string;
+  client: string;
+  clientId: string;
+  lot: string;
+  date: string;
+  status: string;
+  type: string;
+  email: string;
+  phone: string;
+  address: string;
+  lotSize: string;
+  lotLocation: string;
+  totalAmount: number;
+  downPayment: number;
+  monthlyPayment: number;
+  paymentTerm: string;
+  amountPaid: number;
+  remainingBalance: number;
+  nextPaymentDate: string;
+  expiryDate: string;
+  terms: string;
+}
+
+interface PaymentHistory {
+  id: string;
+  date: string;
+  type: string;
+  amount: number;
+  status: string;
+  method: string;
+  reference: string;
+}
 
 export function PaymentsContracts() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,182 +76,15 @@ export function PaymentsContracts() {
   const [termFilter, setTermFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-const [showContractGenerator, setShowContractGenerator] = useState(false);
+
+  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [showContractDetails, setShowContractDetails] = useState(false);
-  const [selectedContract, setSelectedContract] = useState<any>(null);
-
-  const payments = [
-    { 
-      id: 'PAY-001', 
-      client: 'Maria Santos', 
-      lot: 'A-002', 
-      amount: 45000, 
-      paid: 25000, 
-      due: 20000, 
-      dueDate: '2024-12-15', 
-      status: 'partial',
-      contractId: 'CON-001'
-    },
-    { 
-      id: 'PAY-002', 
-      client: 'Juan Cruz', 
-      lot: 'A-003', 
-      amount: 45000, 
-      paid: 45000, 
-      due: 0, 
-      dueDate: '2024-11-30', 
-      status: 'paid',
-      contractId: 'CON-002'
-    },
-    { 
-      id: 'PAY-003', 
-      client: 'Pedro Garcia', 
-      lot: 'B-002', 
-      amount: 55000, 
-      paid: 0, 
-      due: 55000, 
-      dueDate: '2024-12-20', 
-      status: 'pending',
-      contractId: 'CON-003'
-    },
-    { 
-      id: 'PAY-004', 
-      client: 'Ana Lopez', 
-      lot: 'B-003', 
-      amount: 55000, 
-      paid: 55000, 
-      due: 0, 
-      dueDate: '2024-12-01', 
-      status: 'paid',
-      contractId: 'CON-004'
-    },
-    { 
-      id: 'PAY-005', 
-      client: 'Carlos Rivera', 
-      lot: 'C-005', 
-      amount: 35000, 
-      paid: 10000, 
-      due: 25000, 
-      dueDate: '2024-12-25', 
-      status: 'overdue',
-      contractId: 'CON-005'
-    },
-  ];
-
-  const contracts = [
-    { 
-      id: 'CON-001', 
-      client: 'Maria Santos', 
-      lot: 'A-002', 
-      date: '2024-10-15', 
-      status: 'active', 
-      type: 'burial',
-      email: 'maria.santos@email.com',
-      phone: '+63 912 345 6789',
-      address: '123 Main St, Dumaguete City',
-      lotSize: '2m x 1m',
-      lotLocation: 'Section A, Row 2',
-      totalAmount: 45000,
-      downPayment: 15000,
-      monthlyPayment: 2500,
-      paymentTerm: '12 months',
-      amountPaid: 25000,
-      remainingBalance: 20000,
-      nextPaymentDate: '2024-12-15',
-      expiryDate: '2025-10-15',
-      terms: 'Standard burial contract with 12-month payment plan. Includes perpetual care and maintenance.'
-    },
-    { 
-      id: 'CON-002', 
-      client: 'Juan Cruz', 
-      lot: 'A-003', 
-      date: '2024-09-20', 
-      status: 'completed', 
-      type: 'burial',
-      email: 'juan.cruz@email.com',
-      phone: '+63 923 456 7890',
-      address: '456 Oak Ave, Dumaguete City',
-      lotSize: '2m x 1m',
-      lotLocation: 'Section A, Row 3',
-      totalAmount: 45000,
-      downPayment: 15000,
-      monthlyPayment: 2500,
-      paymentTerm: '12 months',
-      amountPaid: 45000,
-      remainingBalance: 0,
-      nextPaymentDate: 'N/A',
-      expiryDate: '2025-09-20',
-      terms: 'Standard burial contract with 12-month payment plan. Fully paid. Includes perpetual care and maintenance.'
-    },
-    { 
-      id: 'CON-003', 
-      client: 'Pedro Garcia', 
-      lot: 'B-002', 
-      date: '2024-11-01', 
-      status: 'active', 
-      type: 'burial',
-      email: 'pedro.garcia@email.com',
-      phone: '+63 934 567 8901',
-      address: '789 Pine Rd, Dumaguete City',
-      lotSize: '2.5m x 1.5m',
-      lotLocation: 'Section B, Row 2',
-      totalAmount: 55000,
-      downPayment: 18000,
-      monthlyPayment: 3000,
-      paymentTerm: '12 months',
-      amountPaid: 18000,
-      remainingBalance: 37000,
-      nextPaymentDate: '2024-12-01',
-      expiryDate: '2025-11-01',
-      terms: 'Premium burial contract with 12-month payment plan. Includes perpetual care and maintenance.'
-    },
-    { 
-      id: 'CON-004', 
-      client: 'Ana Lopez', 
-      lot: 'B-003', 
-      date: '2024-10-05', 
-      status: 'completed', 
-      type: 'burial',
-      email: 'ana.lopez@email.com',
-      phone: '+63 945 678 9012',
-      address: '321 Elm St, Dumaguete City',
-      lotSize: '2.5m x 1.5m',
-      lotLocation: 'Section B, Row 3',
-      totalAmount: 55000,
-      downPayment: 18000,
-      monthlyPayment: 3000,
-      paymentTerm: '12 months',
-      amountPaid: 55000,
-      remainingBalance: 0,
-      nextPaymentDate: 'N/A',
-      expiryDate: '2025-10-05',
-      terms: 'Premium burial contract with 12-month payment plan. Fully paid. Includes perpetual care and maintenance.'
-    },
-    { 
-      id: 'CON-005', 
-      client: 'Carlos Rivera', 
-      lot: 'C-005', 
-      date: '2024-09-10', 
-      status: 'active', 
-      type: 'memorial',
-      email: 'carlos.rivera@email.com',
-      phone: '+63 956 789 0123',
-      address: '654 Maple Dr, Dumaguete City',
-      lotSize: '1.5m x 1m',
-      lotLocation: 'Section C, Row 5',
-      totalAmount: 35000,
-      downPayment: 12000,
-      monthlyPayment: 2000,
-      paymentTerm: '12 months',
-      amountPaid: 16000,
-      remainingBalance: 19000,
-      nextPaymentDate: '2024-11-10',
-      expiryDate: '2025-09-10',
-      terms: 'Memorial garden contract with 12-month payment plan. Includes perpetual care and maintenance.'
-    },
-  ];
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
   const installmentPlans = [
     {
@@ -250,6 +139,192 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
     }
   ];
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([loadPayments(), loadContracts()]);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Failed to load data');
+      setLoading(false);
+    }
+  };
+
+// Load payments from user payment summaries
+const loadPayments = async () => {
+  try {
+    console.log('🔍 Starting to load payments...');
+    const paymentsListPromises: Payment[] = [];
+    
+    // Get all users
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    console.log('👥 Total users found:', usersSnapshot.size);
+    
+    let paymentCounter = 1;
+    
+    for (const userDoc of usersSnapshot.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+      
+      console.log(`📋 Checking user ${userId}:`, {
+        displayName: userData.displayName,
+        email: userData.email,
+        role: userData.role
+      });
+      
+      // Get payment summary for this user
+      const paymentSummaryDoc = await getDoc(
+        doc(db, 'users', userId, 'payments', 'summary')
+      );
+      
+      console.log(`💰 Payment summary exists for ${userId}:`, paymentSummaryDoc.exists());
+      
+      if (paymentSummaryDoc.exists()) {
+        const paymentData = paymentSummaryDoc.data();
+        console.log(`💵 Payment data for ${userId}:`, paymentData);
+        
+        // Determine status
+        let status = 'pending';
+        if (paymentData.remainingBalance === 0) {
+          status = 'paid';
+        } else if (paymentData.totalPaid > 0) {
+          status = 'partial';
+        }
+        
+        // Check if overdue
+        if (paymentData.nextDueDate) {
+          const dueDate = new Date(paymentData.nextDueDate);
+          const now = new Date();
+          if (dueDate < now && paymentData.remainingBalance > 0) {
+            status = 'overdue';
+          }
+        }
+        
+        // Generate sequential payment ID
+        const paymentId = paymentData.paymentId || `PAY-${String(paymentCounter).padStart(3, '0')}`;
+        paymentCounter++;
+        
+        paymentsListPromises.push({
+          id: paymentId,
+          client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
+          clientId: userId,
+          lot: paymentData.lotNumber || 'N/A',
+          amount: paymentData.totalAmount || 0,
+          paid: paymentData.totalPaid || 0,
+          due: paymentData.remainingBalance || 0,
+          dueDate: paymentData.nextDueDate || 'N/A',
+          status,
+          contractId: paymentData.contractId || 'N/A',
+        });
+      }
+    }
+    
+    // Sort by payment ID to maintain order
+    paymentsListPromises.sort((a, b) => a.id.localeCompare(b.id));
+    
+    setPayments(paymentsListPromises);
+  } catch (error) {
+    console.error('Error loading payments:', error);
+  }
+};
+  // Load contracts from pre-need agreements
+// Load contracts from pre-need agreements
+const loadContracts = async () => {
+  try {
+    const contractsQuery = query(
+      collection(db, 'preNeedAgreements'),
+      orderBy('createdAt', 'desc')
+    );
+    const contractsSnapshot = await getDocs(contractsQuery);
+    
+    const contractsList: Contract[] = [];
+    let contractCounter = 1;
+    
+    for (const contractDoc of contractsSnapshot.docs) {
+      const data = contractDoc.data();
+      
+      // Get user data
+      const userDoc = await getDoc(doc(db, 'users', data.userId));
+      const userData = userDoc.exists() ? userDoc.data() : {};
+      
+      const totalAmount = data.totalCost || 0;
+      const downPayment = data.initialPayment || 0;
+      const amountPaid = data.amountPaid || downPayment;
+      const remainingBalance = totalAmount - amountPaid;
+      
+      // Generate sequential contract ID
+      const contractId = data.contractId || `CON-${String(contractCounter).padStart(3, '0')}`;
+      contractCounter++;
+      
+      contractsList.push({
+        id: contractId,
+          client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
+          clientId: data.userId,
+          lot: data.lotNumber || 'N/A',
+          date: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A',
+          status: remainingBalance === 0 ? 'completed' : 'active',
+          type: data.planType || 'burial',
+          email: userData.email || 'N/A',
+          phone: userData.phoneNumber || 'N/A',
+          address: userData.address || 'N/A',
+          lotSize: data.lotSize || '2m x 1m',
+          lotLocation: data.lotLocation || `Section ${data.section || 'A'}`,
+          totalAmount,
+          downPayment,
+          monthlyPayment: data.monthlyPayment || 0,
+          paymentTerm: data.paymentTerm || '12 months',
+          amountPaid,
+          remainingBalance,
+          nextPaymentDate: data.nextPaymentDate || 'N/A',
+          expiryDate: data.expiryDate || 'N/A',
+          terms: data.terms || 'Standard contract terms and conditions apply.',
+        });
+      }
+      
+  // Sort by contract ID to maintain order
+      contractsList.sort((a, b) => a.id.localeCompare(b.id));
+      
+      setContracts(contractsList);
+    } catch (error) {
+      console.error('Error loading contracts:', error);
+    }
+  };
+
+  // Load payment history for a specific user
+  const loadPaymentHistory = async (clientId: string): Promise<PaymentHistory[]> => {
+    try {
+      const historyQuery = query(
+        collection(db, 'users', clientId, 'payments', 'transactions', 'history'),
+        orderBy('paymentDate', 'desc')
+      );
+      const historySnapshot = await getDocs(historyQuery);
+      
+      const history: PaymentHistory[] = [];
+      historySnapshot.forEach((doc) => {
+        const data = doc.data();
+        history.push({
+          id: doc.id,
+          date: data.paymentDate ? new Date(data.paymentDate.toDate()).toLocaleDateString() : 'N/A',
+          type: data.transactionType || 'Payment',
+          amount: data.amount || 0,
+          status: data.status || 'completed',
+          method: data.paymentMethod || 'N/A',
+          reference: data.transactionId || 'N/A',
+        });
+      });
+      
+      return history;
+    } catch (error) {
+      console.error('Error loading payment history:', error);
+      return [];
+    }
+  };
+
   const filteredPayments = payments.filter(payment => {
     const matchesSearch = payment.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          payment.lot.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -278,54 +353,22 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
     return `₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Mock payment history data
-  const getPaymentHistory = (clientName: string) => {
-    const histories: { [key: string]: any[] } = {
-      'Maria Santos': [
-        { id: '1', date: '2024-10-15', type: 'Down Payment', amount: 15000, status: 'paid', method: 'Bank Transfer', reference: 'BT001' },
-        { id: '2', date: '2024-11-15', type: 'Monthly Payment 1', amount: 2500, status: 'paid', method: 'Cash', reference: 'CSH001' },
-        { id: '3', date: '2024-12-15', type: 'Monthly Payment 2', amount: 2500, status: 'overdue', method: '', reference: '' },
-        { id: '4', date: '2025-01-15', type: 'Monthly Payment 3', amount: 2500, status: 'pending', method: '', reference: '' }
-      ],
-      'Juan Cruz': [
-        { id: '1', date: '2024-09-20', type: 'Down Payment', amount: 15000, status: 'paid', method: 'Credit Card', reference: 'CC001' },
-        { id: '2', date: '2024-10-20', type: 'Monthly Payment 1', amount: 2500, status: 'paid', method: 'Bank Transfer', reference: 'BT002' },
-        { id: '3', date: '2024-11-20', type: 'Monthly Payment 2', amount: 2500, status: 'paid', method: 'Cash', reference: 'CSH002' },
-        { id: '4', date: '2024-12-20', type: 'Monthly Payment 3', amount: 2500, status: 'pending', method: '', reference: '' }
-      ],
-      'Pedro Garcia': [
-        { id: '1', date: '2024-11-01', type: 'Down Payment', amount: 18000, status: 'paid', method: 'Bank Transfer', reference: 'BT003' },
-        { id: '2', date: '2024-12-01', type: 'Monthly Payment 1', amount: 3000, status: 'pending', method: '', reference: '' }
-      ],
-      'Ana Lopez': [
-        { id: '1', date: '2024-10-05', type: 'Down Payment', amount: 18000, status: 'paid', method: 'Cash', reference: 'CSH003' },
-        { id: '2', date: '2024-11-05', type: 'Monthly Payment 1', amount: 3000, status: 'paid', method: 'Bank Transfer', reference: 'BT004' },
-        { id: '3', date: '2024-12-05', type: 'Monthly Payment 2', amount: 3000, status: 'paid', method: 'Credit Card', reference: 'CC002' }
-      ],
-      'Carlos Rivera': [
-        { id: '1', date: '2024-09-10', type: 'Down Payment', amount: 12000, status: 'paid', method: 'Cash', reference: 'CSH004' },
-        { id: '2', date: '2024-10-10', type: 'Monthly Payment 1', amount: 2000, status: 'partial', method: 'Bank Transfer', reference: 'BT005' },
-        { id: '3', date: '2024-11-10', type: 'Monthly Payment 2', amount: 2000, status: 'overdue', method: '', reference: '' }
-      ]
-    };
-    return histories[clientName] || [];
-  };
-
-  const handleViewHistory = (payment: any) => {
+  const handleViewHistory = async (payment: Payment) => {
+    const history = await loadPaymentHistory(payment.clientId);
     setSelectedClient({
       name: payment.client,
       lotNumber: payment.lot,
-      history: getPaymentHistory(payment.client)
+      history,
     });
     setShowPaymentHistory(true);
   };
 
-  const handleViewContract = (contract: any) => {
+  const handleViewContract = (contract: Contract) => {
     setSelectedContract(contract);
     setShowContractDetails(true);
   };
 
-  const handleDownloadContract = (contract: any) => {
+  const handleDownloadContract = (contract: Contract) => {
     toast.success(`Contract ${contract.id} downloaded successfully`, {
       description: `Downloaded contract for ${contract.client}`
     });
@@ -350,21 +393,27 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
     }
   };
 
-  const totalRevenue = payments.reduce((sum, payment) => sum + payment.paid, 0);
-  const totalPending = payments.reduce((sum, payment) => sum + payment.due, 0);
-  const overduePayments = payments.filter(p => p.status === 'overdue').length;
+const totalRevenue = payments.reduce((sum, payment) => sum + payment.paid, 0);
+const totalPending = payments.reduce((sum, payment) => sum + payment.due, 0);
+const overduePayments = payments.filter(p => p.status === 'overdue').length;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="mt-4 text-muted-foreground">Loading payments and contracts...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold">Payments & Contracts</h2>
-          <p className="text-muted-foreground">Manage payment records and contracts</p>
+          <p className="text-muted-foreground">Manage payment records and contracts ({payments.length} payments, {contracts.length} contracts)</p>
         </div>
-        <Button onClick={() => setShowContractGenerator(true)} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Generate Contract
-        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -391,7 +440,6 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
             </div>
           </CardContent>
         </Card>
-     
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -399,6 +447,17 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
               <div>
                 <p className="text-sm text-muted-foreground">Overdue</p>
                 <p className="text-xl font-bold text-red-600">{overduePayments}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <div className="h-5 w-5 bg-blue-600 rounded-full" />
+              <div>
+                <p className="text-sm text-muted-foreground">Active Contracts</p>
+                <p className="text-xl font-bold text-blue-600">{contracts.filter(c => c.status === 'active').length}</p>
               </div>
             </div>
           </CardContent>
@@ -455,35 +514,41 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell className="font-medium">{payment.id}</TableCell>
-                      <TableCell>{payment.client}</TableCell>
-                      <TableCell>{payment.lot}</TableCell>
-                      <TableCell>₱{payment.amount.toLocaleString()}</TableCell>
-                      <TableCell>₱{payment.paid.toLocaleString()}</TableCell>
-                      <TableCell>{payment.dueDate}</TableCell>
-                      <TableCell>
-                        <Badge className={getPaymentStatusColor(payment.status)}>
-                          {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleViewHistory(payment)}
-                            title="View Payment History"
-                          >
-                            <History className="h-4 w-4" />
-                          </Button>
-                         
-                          
-                        </div>
+                  {filteredPayments.length > 0 ? (
+                    filteredPayments.map((payment) => (
+                      <TableRow key={payment.id}>
+                        <TableCell className="font-medium">{payment.id}</TableCell>
+                        <TableCell>{payment.client}</TableCell>
+                        <TableCell>{payment.lot}</TableCell>
+                        <TableCell>₱{payment.amount.toLocaleString()}</TableCell>
+                        <TableCell>₱{payment.paid.toLocaleString()}</TableCell>
+                        <TableCell>{payment.dueDate}</TableCell>
+                        <TableCell>
+                          <Badge className={getPaymentStatusColor(payment.status)}>
+                            {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleViewHistory(payment)}
+                              title="View Payment History"
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        No payments found
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -518,32 +583,40 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredContracts.map((contract) => (
-                    <TableRow key={contract.id}>
-                      <TableCell className="font-medium">{contract.id}</TableCell>
-                      <TableCell>{contract.client}</TableCell>
-                      <TableCell>{contract.lot}</TableCell>
-                      <TableCell>{contract.date}</TableCell>
-                      <TableCell className="capitalize">{contract.type}</TableCell>
-                      <TableCell>
-                        <Badge className={getContractStatusColor(contract.status)}>
-                          {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleViewContract(contract)}
-                            title="View Contract Details"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
+                  {filteredContracts.length > 0 ? (
+                    filteredContracts.map((contract) => (
+                      <TableRow key={contract.id}>
+                        <TableCell className="font-medium">{contract.id}</TableCell>
+                        <TableCell>{contract.client}</TableCell>
+                        <TableCell>{contract.lot}</TableCell>
+                        <TableCell>{contract.date}</TableCell>
+                        <TableCell className="capitalize">{contract.type}</TableCell>
+                        <TableCell>
+                          <Badge className={getContractStatusColor(contract.status)}>
+                            {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleViewContract(contract)}
+                              title="View Contract Details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No contracts found
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -590,9 +663,15 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
                     <TableHead>Lot Type</TableHead>
                     <TableHead>Total Price</TableHead>
                     <TableHead>Down Payment</TableHead>
-                    <TableHead>12 Months (Monthly)</TableHead>
-                    <TableHead>36 Months (Monthly)</TableHead>
-                    <TableHead>60 Months (Monthly)</TableHead>
+                    {(termFilter === 'all' || termFilter === '12') && (
+                      <TableHead className="bg-primary/5">12 Months (Monthly)</TableHead>
+                    )}
+                    {(termFilter === 'all' || termFilter === '36') && (
+                      <TableHead className="bg-primary/5">36 Months (Monthly)</TableHead>
+                    )}
+                    {(termFilter === 'all' || termFilter === '60') && (
+                      <TableHead className="bg-primary/5">60 Months (Monthly)</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -601,15 +680,21 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
                       <TableCell className="font-medium">{plan.lotType}</TableCell>
                       <TableCell>{formatCurrency(plan.totalPrice)}</TableCell>
                       <TableCell>{formatCurrency(plan.downPayment)}</TableCell>
-                      <TableCell className={termFilter === 'all' || termFilter === '12' ? 'bg-primary/5' : ''}>
-                        {formatCurrency(plan.monthly12)}
-                      </TableCell>
-                      <TableCell className={termFilter === 'all' || termFilter === '36' ? 'bg-primary/5' : ''}>
-                        {formatCurrency(plan.monthly36)}
-                      </TableCell>
-                      <TableCell className={termFilter === 'all' || termFilter === '60' ? 'bg-primary/5' : ''}>
-                        {formatCurrency(plan.monthly60)}
-                      </TableCell>
+                      {(termFilter === 'all' || termFilter === '12') && (
+                        <TableCell className="bg-primary/5 font-semibold">
+                          {formatCurrency(plan.monthly12)}
+                        </TableCell>
+                      )}
+                      {(termFilter === 'all' || termFilter === '36') && (
+                        <TableCell className="bg-primary/5 font-semibold">
+                          {formatCurrency(plan.monthly36)}
+                        </TableCell>
+                      )}
+                      {(termFilter === 'all' || termFilter === '60') && (
+                        <TableCell className="bg-primary/5 font-semibold">
+                          {formatCurrency(plan.monthly60)}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -661,26 +746,56 @@ const [showContractGenerator, setShowContractGenerator] = useState(false);
         </TabsContent>
       </Tabs>
 
-      {/* Contract Generator Modal */}
-      <ContractGenerator
-        isOpen={showContractGenerator}
-        onClose={() => setShowContractGenerator(false)}
-        installmentPlans={installmentPlans}
-      />
-
       {/* Payment History Modal */}
-      {selectedClient && (
-        <PaymentHistoryModal
-          isOpen={showPaymentHistory}
-          onClose={() => {
-            setShowPaymentHistory(false);
-            setSelectedClient(null);
-          }}
-          clientName={selectedClient.name}
-          lotNumber={selectedClient.lotNumber}
-          paymentHistory={selectedClient.history}
-        />
-      )}
+      <Dialog open={showPaymentHistory} onOpenChange={setShowPaymentHistory}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Payment History - {selectedClient?.name}</DialogTitle>
+            <DialogDescription>Lot: {selectedClient?.lotNumber}</DialogDescription>
+          </DialogHeader>
+          {selectedClient && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedClient.history.length > 0 ? (
+                  selectedClient.history.map((item: PaymentHistory) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.date}</TableCell>
+                      <TableCell>{item.type}</TableCell>
+                      <TableCell>₱{item.amount.toLocaleString()}</TableCell>
+                      <TableCell>{item.method}</TableCell>
+                      <TableCell>{item.reference}</TableCell>
+                      <TableCell>
+                        <Badge className={getPaymentStatusColor(item.status)}>
+                          {item.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No payment history found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentHistory(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Contract Details Modal */}
       <Dialog open={showContractDetails} onOpenChange={setShowContractDetails}>

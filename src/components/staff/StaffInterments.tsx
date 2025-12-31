@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, CheckCircle, AlertCircle, Phone, Mail } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 
 export function StaffInterments() {
   const [statusFilter, setStatusFilter] = useState('all');
@@ -248,7 +249,7 @@ export function StaffInterments() {
                           </div>
                         )}
 
-                        {interment.status !== 'completed' && (
+                      {interment.status !== 'completed' && (
                           <div className="flex gap-2">
                             {interment.status === 'scheduled' && (
                               <Button 
@@ -268,10 +269,86 @@ export function StaffInterments() {
                                 Mark Complete
                               </Button>
                             )}
-                            <Button variant="outline" size="sm">
-                              <User className="h-4 w-4 mr-1" />
-                              Contact Client
-                            </Button>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <User className="h-4 w-4 mr-1" />
+                                  Contact Client
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                  <DialogTitle>Client Information - {interment.id}</DialogTitle>
+                                  <DialogDescription>Contact details and service information</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Client Name</p>
+                                      <p className="font-medium">{interment.client}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Deceased</p>
+                                      <p className="font-medium">{interment.deceased}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Contact Number</p>
+                                      <div className="flex items-center gap-2">
+                                        <Phone className="h-4 w-4 text-muted-foreground" />
+                                        <p className="font-medium">{interment.contact}</p>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Service Date</p>
+                                      <p className="font-medium">{interment.date}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Service Time</p>
+                                      <p className="font-medium">{interment.time}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Location</p>
+                                      <p className="font-medium">{interment.lot}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Status</p>
+                                      <Badge className={getStatusColor(interment.status)}>
+                                        {interment.status.charAt(0).toUpperCase() + interment.status.slice(1)}
+                                      </Badge>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Assigned Staff</p>
+                                      <p className="font-medium">{interment.assignedStaff}</p>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <p className="text-sm text-muted-foreground mb-2">Services Included</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {interment.services.map((service, index) => (
+                                        <Badge key={index} variant="outline">
+                                          {service}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {interment.notes && (
+                                    <div>
+                                      <p className="text-sm text-muted-foreground mb-1">Special Notes</p>
+                                      <p className="text-sm p-3 bg-muted rounded-md italic">{interment.notes}</p>
+                                    </div>
+                                  )}
+
+                                <div className="flex justify-center pt-4 border-t">
+                                    <Button variant="outline">
+                                      <Mail className="h-4 w-4 mr-2" />
+                                      Send Message
+                                    </Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                           </div>
                         )}
                       </CardContent>
