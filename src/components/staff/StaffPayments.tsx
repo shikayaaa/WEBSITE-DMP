@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Eye, FileText, DollarSign } from 'lucide-react';
+import { Search, Download, Eye, FileText, DollarSign, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../ui/dialog';
 import { db } from '../../firebase';
-import { collection, onSnapshot, query, orderBy, Timestamp, getDocs, getDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, Timestamp, getDocs, getDoc, doc, deleteDoc } from 'firebase/firestore';
+import { toast } from 'sonner';
 
 type PaymentStatus = 'paid' | 'partial' | 'pending' | 'overdue';
 
 type Payment = {
   id: string;
-  paymentId: string;  // ADDED: Human-readable payment ID
+  paymentId: string;
   client: string;
   clientId?: string;
   lot: string;
@@ -37,104 +38,108 @@ export function StaffPayments() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-useEffect(() => {
-  const fetchPayments = async () => {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    const fetchPayments = async () => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      console.log('🔍 [STAFF] Starting to load payments...');
-      const paymentsListPromises: Payment[] = [];
-      
-      // Get all users
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      console.log('👥 [STAFF] Total users found:', usersSnapshot.size);
-      
-      let paymentCounter = 1;
+      try {
+        console.log('🔍 [STAFF] Starting to load payments...');
+        const paymentsListPromises: Payment[] = [];
+        
+        // Get all users
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        console.log('👥 [STAFF] Total users found:', usersSnapshot.size);
+        
+        let paymentCounter = 1;
 
-      for (const userDoc of usersSnapshot.docs) {
-        const userId = userDoc.id;
-        const userData = userDoc.data();
-        
-        console.log(`📋 [STAFF] Checking user ${userId}:`, {
-          displayName: userData.displayName,
-          email: userData.email,
-          role: userData.role
-        });
-        
-        // Get payment summary for this user
-        const paymentSummaryDoc = await getDoc(
-          doc(db, 'users', userId, 'payments', 'summary')
-        );
-        
-        console.log(`💰 [STAFF] Payment summary exists for ${userId}:`, paymentSummaryDoc.exists());
-        
-        if (paymentSummaryDoc.exists()) {
-          const paymentData = paymentSummaryDoc.data();
-          console.log(`💵 [STAFF] Payment data for ${userId}:`, paymentData);
+        for (const userDoc of usersSnapshot.docs) {
+          const userId = userDoc.id;
+          const userData = userDoc.data();
           
-          // Determine status
-          let status: PaymentStatus = 'pending';
-          if (paymentData.remainingBalance === 0) {
-            status = 'paid';
-          } else if (paymentData.totalPaid > 0) {
-            status = 'partial';
-          }
-          
-          // Check if overdue
-          if (paymentData.nextDueDate) {
-            const dueDate = new Date(paymentData.nextDueDate);
-            const now = new Date();
-            if (dueDate < now && paymentData.remainingBalance > 0) {
-              status = 'overdue';
-            }
-          }
-          
-          // Generate sequential payment ID
-          const paymentId = paymentData.paymentId || `PAY-${String(paymentCounter).padStart(3, '0')}`;
-          paymentCounter++;
-          
-          paymentsListPromises.push({
-            id: userId,
-            paymentId: paymentId,
-            client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
-            clientId: userId,
-            lot: paymentData.lotNumber || 'N/A',
-            lotId: paymentData.lotId || undefined,
-            amount: paymentData.totalAmount || 0,
-            paid: paymentData.totalPaid || 0,
-            balance: paymentData.remainingBalance || 0,
-            dueDate: paymentData.nextDueDate || 'N/A',
-            status,
-            paymentDate: paymentData.lastPaymentDate || null,
-            method: paymentData.lastPaymentMethod || null,
-            reference: paymentData.lastTransactionId || null,
-            createdAt: paymentData.createdAt?.toDate() || undefined,
-            updatedAt: paymentData.updatedAt?.toDate() || undefined,
+          console.log(`📋 [STAFF] Checking user ${userId}:`, {
+            displayName: userData.displayName,
+            email: userData.email,
+            role: userData.role
           });
+          
+          // Get payment summary for this user
+          const paymentSummaryDoc = await getDoc(
+            doc(db, 'users', userId, 'payments', 'summary')
+          );
+          
+          console.log(`💰 [STAFF] Payment summary exists for ${userId}:`, paymentSummaryDoc.exists());
+          
+          if (paymentSummaryDoc.exists()) {
+            const paymentData = paymentSummaryDoc.data();
+            console.log(`💵 [STAFF] Payment data for ${userId}:`, paymentData);
+            
+            // Determine status
+            let status: PaymentStatus = 'pending';
+            if (paymentData.remainingBalance === 0) {
+              status = 'paid';
+            } else if (paymentData.totalPaid > 0) {
+              status = 'partial';
+            }
+            
+            // Check if overdue
+            if (paymentData.nextDueDate) {
+              const dueDate = new Date(paymentData.nextDueDate);
+              const now = new Date();
+              if (dueDate < now && paymentData.remainingBalance > 0) {
+                status = 'overdue';
+              }
+            }
+            
+            // Generate sequential payment ID
+            const paymentId = paymentData.paymentId || `PAY-${String(paymentCounter).padStart(3, '0')}`;
+            paymentCounter++;
+            
+            paymentsListPromises.push({
+              id: userId,
+              paymentId: paymentId,
+              client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
+              clientId: userId,
+              lot: paymentData.lotNumber || 'N/A',
+              lotId: paymentData.lotId || undefined,
+              amount: paymentData.totalAmount || 0,
+              paid: paymentData.totalPaid || 0,
+              balance: paymentData.remainingBalance || 0,
+              dueDate: paymentData.nextDueDate || 'N/A',
+              status,
+              paymentDate: paymentData.lastPaymentDate || null,
+              method: paymentData.lastPaymentMethod || null,
+              reference: paymentData.lastTransactionId || null,
+              createdAt: paymentData.createdAt?.toDate() || undefined,
+              updatedAt: paymentData.updatedAt?.toDate() || undefined,
+            });
+          }
         }
+        
+        // Sort by payment ID to maintain order
+        paymentsListPromises.sort((a, b) => a.paymentId.localeCompare(b.paymentId));
+        
+        setPayments(paymentsListPromises);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching payments:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load payments');
+        setLoading(false);
       }
-      
-      // Sort by payment ID to maintain order
-      paymentsListPromises.sort((a, b) => a.paymentId.localeCompare(b.paymentId));
-      
-      setPayments(paymentsListPromises);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load payments');
-      setLoading(false);
-    }
-  };
+    };
 
-  fetchPayments();
-}, []);
+    fetchPayments();
+  }, []);
+
   const filteredPayments = payments.filter((payment) => {
     const matchesSearch =
       payment.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
       payment.lot.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.paymentId.toLowerCase().includes(searchTerm.toLowerCase());  // FIXED: Search by paymentId
+      payment.paymentId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -154,9 +159,61 @@ useEffect(() => {
     }
   };
 
-  const generateReceipt = (paymentId: string) => {
-    // Mock receipt generation
-    alert(`Generating receipt for ${paymentId}...`);
+  // Delete handlers
+  const handleDeletePayment = (payment: Payment) => {
+    setPaymentToDelete(payment);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!paymentToDelete) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      console.log('Attempting to delete payment record for user:', paymentToDelete.id);
+      
+      // Delete the payment summary subcollection document
+      const paymentSummaryRef = doc(db, 'users', paymentToDelete.id, 'payments', 'summary');
+      await deleteDoc(paymentSummaryRef);
+      
+      console.log('Payment record deleted successfully');
+      
+      // Show success message
+      toast.success('Payment record deleted successfully', {
+        description: `Payment record for ${paymentToDelete.client} has been removed.`,
+        duration: 3000,
+      });
+      
+      // Close dialog and reset state
+      setDeleteDialogOpen(false);
+      setPaymentToDelete(null);
+      
+      // Remove from local state
+      setPayments(prev => prev.filter(p => p.id !== paymentToDelete.id));
+      
+    } catch (error: any) {
+      console.error('Error deleting payment:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      let errorMessage = 'An error occurred while deleting the payment record.';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage = 'You do not have permission to delete this payment record. Please contact an administrator.';
+      } else if (error.code === 'not-found') {
+        errorMessage = 'Payment record not found. It may have already been deleted.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error('Failed to delete payment record', {
+        description: errorMessage,
+        duration: 5000,
+      });
+      
+      setIsDeleting(false);
+    }
   };
 
   const totalCollected = payments.reduce((sum, payment) => sum + payment.paid, 0);
@@ -166,7 +223,12 @@ useEffect(() => {
   if (loading) {
     return (
       <div className="p-6">
-        <p className="text-sm text-muted-foreground">Loading payment records...</p>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-sm text-muted-foreground">Loading payment records...</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -174,7 +236,14 @@ useEffect(() => {
   if (error) {
     return (
       <div className="p-6">
-        <p className="text-sm text-destructive">Error loading payments: {error}</p>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <p className="text-sm text-destructive mb-4">Error loading payments: {error}</p>
+            <Button onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -290,7 +359,7 @@ useEffect(() => {
                 ) : (
                   filteredPayments.map((payment) => (
                     <TableRow key={payment.id}>
-                      <TableCell className="font-medium">{payment.paymentId}</TableCell>  {/* FIXED: Display paymentId */}
+                      <TableCell className="font-medium">{payment.paymentId}</TableCell>
                       <TableCell>{payment.client}</TableCell>
                       <TableCell>{payment.lot}</TableCell>
                       <TableCell>₱{payment.amount.toLocaleString()}</TableCell>
@@ -302,7 +371,7 @@ useEffect(() => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2">
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button variant="ghost" size="sm">
@@ -311,7 +380,7 @@ useEffect(() => {
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Payment Details - {payment.paymentId}</DialogTitle>  {/* FIXED */}
+                                <DialogTitle>Payment Details - {payment.paymentId}</DialogTitle>
                                 <DialogDescription>Complete payment information</DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
@@ -372,7 +441,15 @@ useEffect(() => {
                               </div>
                             </DialogContent>
                           </Dialog>
-                        
+                          
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDeletePayment(payment)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -422,6 +499,70 @@ useEffect(() => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Payment Record</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this payment record? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {paymentToDelete && (
+            <div className="py-4 space-y-2">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Payment ID:</span>
+                <span className="text-sm font-medium">{paymentToDelete.paymentId}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Client:</span>
+                <span className="text-sm font-medium">{paymentToDelete.client}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Lot:</span>
+                <span className="text-sm font-medium">{paymentToDelete.lot}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Amount:</span>
+                <span className="text-sm font-medium">₱{paymentToDelete.amount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <Badge className={getStatusColor(paymentToDelete.status)}>
+                  {paymentToDelete.status.charAt(0).toUpperCase() + paymentToDelete.status.slice(1)}
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDeleting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <span className="mr-2">Deleting...</span>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Payment Record
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

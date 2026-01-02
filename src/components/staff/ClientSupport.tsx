@@ -1,91 +1,289 @@
-import React, { useState } from 'react';
-import { Search, Send, MessageCircle, AlertTriangle, CheckCircle, Clock, User } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Send, MessageCircle, AlertTriangle, CheckCircle, Clock, User, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../ui/dialog';
 import { Label } from '../ui/label';
+import { db } from '../../firebase';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, Timestamp } from 'firebase/firestore';
+import { toast } from 'sonner';
+import { useAuth } from '../../hooks/useAuth';
+
+type InquiryStatus = 'open' | 'in-progress' | 'resolved' | 'closed';
+type InquiryPriority = 'low' | 'medium' | 'high';
+type InquiryCategory = 'payment' | 'scheduling' | 'maintenance' | 'documentation' | 'general';
+
+type Response = {
+  from: string;
+  fromId?: string;
+  message: string;
+  timestamp: string;
+};
+
+type Inquiry = {
+  id: string;
+  inquiryId: string;
+  client: string;
+  clientId?: string;
+  email?: string;
+  subject: string;
+  message: string;
+  status: InquiryStatus;
+  priority: InquiryPriority;
+  category: InquiryCategory;
+  date: string;
+  assignedTo: string | null;
+  assignedToId?: string;
+  responses: Response[];
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
 export function ClientSupport() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedInquiry, setSelectedInquiry] = useState<any>(null);
+  const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [replyStatus, setReplyStatus] = useState<InquiryStatus>('in-progress');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [inquiryToDelete, setInquiryToDelete] = useState<Inquiry | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Issue reporting states
+  const [issueType, setIssueType] = useState('');
+  const [issueDescription, setIssueDescription] = useState('');
+  const [submittingIssue, setSubmittingIssue] = useState(false);
+  
+  const { userData } = useAuth();
+  const currentStaffName = userData?.displayName || userData?.name || 'Staff';
+  const currentStaffId = userData?.uid || '';
+  
+  const hasFetched = useRef(false);
 
-  const inquiries = [
-    {
-      id: 'INQ-001',
-      client: 'Maria Santos',
-      subject: 'Payment Plan Inquiry',
-      message: 'I would like to know about installment payment options for lot A-002.',
-      status: 'open',
-      priority: 'medium',
-      category: 'payment',
-      date: '2024-12-10 09:30',
-      assignedTo: 'Maria Staff',
-      responses: []
-    },
-    {
-      id: 'INQ-002',
-      client: 'Pedro Garcia',
-      subject: 'Service Scheduling',
-      message: 'Need to reschedule the burial service from Dec 20 to Dec 22 due to family circumstances.',
-      status: 'in-progress',
-      priority: 'high',
-      category: 'scheduling',
-      date: '2024-12-10 11:15',
-      assignedTo: 'Lisa Lopez',
-      responses: [
-        { from: 'Lisa Lopez', message: 'I understand your situation. Let me check the availability for Dec 22.', timestamp: '2024-12-10 11:30' }
-      ]
-    },
-    {
-      id: 'INQ-003',
-      client: 'Rosa Garcia',
-      subject: 'Maintenance Request',
-      message: 'The memorial plaque for lot B-15 has some damage and needs repair.',
-      status: 'resolved',
-      priority: 'low',
-      category: 'maintenance',
-      date: '2024-12-09 14:22',
-      assignedTo: 'Maria Staff',
-      responses: [
-        { from: 'Maria Staff', message: 'Thank you for reporting this. Our maintenance team will inspect and repair the plaque within 3 business days.', timestamp: '2024-12-09 15:00' },
-        { from: 'Maria Staff', message: 'The plaque has been successfully repaired. Please let us know if you need anything else.', timestamp: '2024-12-10 10:00' }
-      ]
-    },
-    {
-      id: 'INQ-004',
-      client: 'Carlos Rivera',
-      subject: 'Document Request',
-      message: 'Please provide a copy of the contract and payment receipts for lot C-005.',
-      status: 'open',
-      priority: 'medium',
-      category: 'documentation',
-      date: '2024-12-10 16:45',
-      assignedTo: 'Maria Staff',
-      responses: []
-    },
-    {
-      id: 'INQ-005',
-      client: 'Ana Lopez',
-      subject: 'General Inquiry',
-      message: 'What are the visiting hours for the memorial park?',
-      status: 'open',
-      priority: 'low',
-      category: 'general',
-      date: '2024-12-10 13:20',
-      assignedTo: null,
-      responses: []
-    },
-  ];
+  useEffect(() => {
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchInquiries();
+    }
+  }, []);
+
+  const fetchInquiries = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('🔍 [SUPPORT] Loading inquiries...');
+      
+      const inquiriesRef = collection(db, 'support_inquiries');
+      const q = query(inquiriesRef, orderBy('createdAt', 'desc'));
+      const inquiriesSnapshot = await getDocs(q);
+      
+      console.log('📋 [SUPPORT] Total inquiries found:', inquiriesSnapshot.size);
+      
+      const inquiriesList: Inquiry[] = [];
+      let inquiryCounter = 1;
+      
+      for (const inquiryDoc of inquiriesSnapshot.docs) {
+        const data = inquiryDoc.data();
+        
+        inquiriesList.push({
+          id: inquiryDoc.id,
+          inquiryId: data.inquiryId || `INQ-${String(inquiryCounter).padStart(3, '0')}`,
+          client: data.clientName || data.client || 'Unknown Client',
+          clientId: data.clientId || data.userId || undefined,
+          email: data.email || undefined,
+          subject: data.subject || 'No Subject',
+          message: data.message || '',
+          status: data.status || 'open',
+          priority: data.priority || 'medium',
+          category: data.category || 'general',
+          date: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleString() : new Date().toLocaleString(),
+          assignedTo: data.assignedTo || null,
+          assignedToId: data.assignedToId || undefined,
+          responses: data.responses || [],
+          createdAt: data.createdAt?.toDate() || undefined,
+          updatedAt: data.updatedAt?.toDate() || undefined,
+        });
+        
+        inquiryCounter++;
+      }
+      
+      console.log('✅ [SUPPORT] Inquiries loaded:', inquiriesList.length);
+      setInquiries(inquiriesList);
+      setLoading(false);
+    } catch (error) {
+      console.error('❌ [SUPPORT] Error fetching inquiries:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load inquiries');
+      setLoading(false);
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!selectedInquiry || !replyMessage.trim()) {
+      toast.error('Please enter a reply message');
+      return;
+    }
+
+    try {
+      setSendingReply(true);
+      
+      const inquiryRef = doc(db, 'support_inquiries', selectedInquiry.id);
+      
+      const newResponse: Response = {
+        from: currentStaffName,
+        fromId: currentStaffId,
+        message: replyMessage,
+        timestamp: new Date().toLocaleString(),
+      };
+      
+      const updatedResponses = [...selectedInquiry.responses, newResponse];
+      
+      await updateDoc(inquiryRef, {
+        responses: updatedResponses,
+        status: replyStatus,
+        assignedTo: currentStaffName,
+        assignedToId: currentStaffId,
+        updatedAt: Timestamp.now(),
+      });
+      
+      toast.success('Reply sent successfully');
+      
+      // Update local state
+      const updatedInquiry = {
+        ...selectedInquiry,
+        responses: updatedResponses,
+        status: replyStatus,
+        assignedTo: currentStaffName,
+        assignedToId: currentStaffId,
+      };
+      
+      setSelectedInquiry(updatedInquiry);
+      setInquiries(prev => prev.map(inq => 
+        inq.id === selectedInquiry.id ? updatedInquiry : inq
+      ));
+      
+      setReplyMessage('');
+      setSendingReply(false);
+    } catch (error: any) {
+      console.error('Error sending reply:', error);
+      toast.error('Failed to send reply', {
+        description: error.message,
+      });
+      setSendingReply(false);
+    }
+  };
+
+  const handleSubmitIssue = async () => {
+    if (!issueType || !issueDescription.trim()) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    try {
+      setSubmittingIssue(true);
+      
+      const issueData = {
+        inquiryId: `ISS-${Date.now()}`,
+        clientName: currentStaffName,
+        clientId: currentStaffId,
+        email: userData?.email || '',
+        subject: `Internal Issue: ${issueType}`,
+        message: issueDescription,
+        status: 'open',
+        priority: 'high',
+        category: 'general',
+        assignedTo: null,
+        responses: [],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      };
+      
+      await addDoc(collection(db, 'support_inquiries'), issueData);
+      
+      toast.success('Issue reported successfully');
+      setIssueType('');
+      setIssueDescription('');
+      setSubmittingIssue(false);
+      
+      // Refresh inquiries
+      fetchInquiries();
+    } catch (error: any) {
+      console.error('Error submitting issue:', error);
+      toast.error('Failed to submit issue', {
+        description: error.message,
+      });
+      setSubmittingIssue(false);
+    }
+  };
+
+  const handleDeleteInquiry = (inquiry: Inquiry) => {
+    setInquiryToDelete(inquiry);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!inquiryToDelete) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      console.log('Attempting to delete inquiry:', inquiryToDelete.id);
+      
+      const inquiryRef = doc(db, 'support_inquiries', inquiryToDelete.id);
+      await deleteDoc(inquiryRef);
+      
+      console.log('Inquiry deleted successfully');
+      
+      toast.success('Inquiry deleted successfully', {
+        description: `Inquiry ${inquiryToDelete.inquiryId} has been removed.`,
+        duration: 3000,
+      });
+      
+      setDeleteDialogOpen(false);
+      setInquiryToDelete(null);
+      
+      // Remove from local state
+      setInquiries(prev => prev.filter(i => i.id !== inquiryToDelete.id));
+      
+      // Clear selection if deleted inquiry was selected
+      if (selectedInquiry?.id === inquiryToDelete.id) {
+        setSelectedInquiry(null);
+      }
+      
+      setIsDeleting(false);
+    } catch (error: any) {
+      console.error('Error deleting inquiry:', error);
+      
+      let errorMessage = 'An error occurred while deleting the inquiry.';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage = 'You do not have permission to delete this inquiry.';
+      } else if (error.code === 'not-found') {
+        errorMessage = 'Inquiry not found. It may have already been deleted.';
+      }
+      
+      toast.error('Failed to delete inquiry', {
+        description: errorMessage,
+        duration: 5000,
+      });
+      
+      setIsDeleting(false);
+    }
+  };
 
   const filteredInquiries = inquiries.filter(inquiry => {
     const matchesSearch = inquiry.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          inquiry.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         inquiry.message.toLowerCase().includes(searchTerm.toLowerCase());
+                         inquiry.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         inquiry.inquiryId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || inquiry.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -122,7 +320,39 @@ export function ClientSupport() {
 
   const openInquiries = inquiries.filter(i => i.status === 'open').length;
   const inProgressInquiries = inquiries.filter(i => i.status === 'in-progress').length;
-  const resolvedToday = inquiries.filter(i => i.status === 'resolved' && i.date.startsWith('2024-12-10')).length;
+  const resolvedToday = inquiries.filter(i => {
+    if (i.status !== 'resolved') return false;
+    const today = new Date().toDateString();
+    const inquiryDate = i.updatedAt ? new Date(i.updatedAt).toDateString() : '';
+    return today === inquiryDate;
+  }).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">Loading support inquiries...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <p className="text-sm text-destructive mb-4">Error loading inquiries: {error}</p>
+          <Button onClick={() => {
+            hasFetched.current = false;
+            fetchInquiries();
+          }}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -146,7 +376,7 @@ export function ClientSupport() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="issue-type">Issue Type</Label>
-                <Select>
+                <Select value={issueType} onValueChange={setIssueType}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select issue type" />
                   </SelectTrigger>
@@ -160,11 +390,25 @@ export function ClientSupport() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="issue-description">Description</Label>
-                <Textarea id="issue-description" placeholder="Describe the issue..." rows={4} />
+                <Textarea 
+                  id="issue-description" 
+                  placeholder="Describe the issue..." 
+                  rows={4}
+                  value={issueDescription}
+                  onChange={(e) => setIssueDescription(e.target.value)}
+                />
               </div>
               <div className="flex justify-end space-x-2">
-                <Button variant="outline">Cancel</Button>
-                <Button className="bg-orange-600 hover:bg-orange-700">Submit Report</Button>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button 
+                  className="bg-orange-600 hover:bg-orange-700"
+                  onClick={handleSubmitIssue}
+                  disabled={submittingIssue}
+                >
+                  {submittingIssue ? 'Submitting...' : 'Submit Report'}
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -211,8 +455,8 @@ export function ClientSupport() {
             <div className="flex items-center space-x-2">
               <User className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Avg Response Time</p>
-                <p className="text-xl font-bold text-purple-600">15 min</p>
+                <p className="text-sm text-muted-foreground">Total Inquiries</p>
+                <p className="text-xl font-bold text-purple-600">{inquiries.length}</p>
               </div>
             </div>
           </CardContent>
@@ -249,40 +493,44 @@ export function ClientSupport() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {filteredInquiries.map((inquiry) => (
-                <Card 
-                  key={inquiry.id} 
-                  className={`cursor-pointer hover:shadow-md transition-shadow ${
-                    selectedInquiry?.id === inquiry.id ? 'ring-2 ring-blue-500' : ''
-                  }`}
-                  onClick={() => setSelectedInquiry(inquiry)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg">{getCategoryIcon(inquiry.category)}</span>
-                        <div>
-                          <h3 className="font-semibold text-sm">{inquiry.subject}</h3>
-                          <p className="text-xs text-muted-foreground">{inquiry.client}</p>
+              {filteredInquiries.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No inquiries found</p>
+              ) : (
+                filteredInquiries.map((inquiry) => (
+                  <Card 
+                    key={inquiry.id} 
+                    className={`cursor-pointer hover:shadow-md transition-shadow ${
+                      selectedInquiry?.id === inquiry.id ? 'ring-2 ring-blue-500' : ''
+                    }`}
+                    onClick={() => setSelectedInquiry(inquiry)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center space-x-2 flex-1">
+                          <span className="text-lg">{getCategoryIcon(inquiry.category)}</span>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-sm truncate">{inquiry.subject}</h3>
+                            <p className="text-xs text-muted-foreground truncate">{inquiry.client}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1 ml-2">
+                          <Badge className={getStatusColor(inquiry.status)}>
+                            {inquiry.status}
+                          </Badge>
+                          <Badge className={getPriorityColor(inquiry.priority)}>
+                            {inquiry.priority}
+                          </Badge>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <Badge className={getStatusColor(inquiry.status)}>
-                          {inquiry.status}
-                        </Badge>
-                        <Badge className={getPriorityColor(inquiry.priority)}>
-                          {inquiry.priority}
-                        </Badge>
+                      <p className="text-sm text-muted-foreground mb-2 truncate">{inquiry.message}</p>
+                      <div className="flex justify-between items-center text-xs text-muted-foreground">
+                        <span>{inquiry.date}</span>
+                        <span>{inquiry.assignedTo || 'Unassigned'}</span>
                       </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2 truncate">{inquiry.message}</p>
-                    <div className="flex justify-between items-center text-xs text-muted-foreground">
-                      <span>{inquiry.date}</span>
-                      <span>{inquiry.assignedTo || 'Unassigned'}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -303,7 +551,9 @@ export function ClientSupport() {
                     </Badge>
                   </div>
                   <div className="space-y-1 text-sm text-muted-foreground">
+                    <p>ID: {selectedInquiry.inquiryId}</p>
                     <p>Client: {selectedInquiry.client}</p>
+                    {selectedInquiry.email && <p>Email: {selectedInquiry.email}</p>}
                     <p>Category: {selectedInquiry.category}</p>
                     <p>Priority: {selectedInquiry.priority}</p>
                     <p>Date: {selectedInquiry.date}</p>
@@ -321,8 +571,8 @@ export function ClientSupport() {
                 {selectedInquiry.responses && selectedInquiry.responses.length > 0 && (
                   <div>
                     <h4 className="font-medium mb-2">Responses</h4>
-                    <div className="space-y-2">
-                      {selectedInquiry.responses.map((response: any, index: number) => (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {selectedInquiry.responses.map((response, index) => (
                         <div key={index} className="bg-blue-50 p-3 rounded-md">
                           <div className="flex justify-between items-start mb-1">
                             <span className="font-medium text-sm">{response.from}</span>
@@ -339,9 +589,14 @@ export function ClientSupport() {
                   <div>
                     <h4 className="font-medium mb-2">Reply</h4>
                     <div className="space-y-2">
-                      <Textarea placeholder="Type your response..." rows={3} />
+                      <Textarea 
+                        placeholder="Type your response..." 
+                        rows={3}
+                        value={replyMessage}
+                        onChange={(e) => setReplyMessage(e.target.value)}
+                      />
                       <div className="flex justify-between items-center">
-                        <Select defaultValue="in-progress">
+                        <Select value={replyStatus} onValueChange={(value) => setReplyStatus(value as InquiryStatus)}>
                           <SelectTrigger className="w-32">
                             <SelectValue />
                           </SelectTrigger>
@@ -350,14 +605,30 @@ export function ClientSupport() {
                             <SelectItem value="resolved">Resolved</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Button size="sm">
+                        <Button 
+                          size="sm"
+                          onClick={handleSendReply}
+                          disabled={sendingReply || !replyMessage.trim()}
+                        >
                           <Send className="h-4 w-4 mr-1" />
-                          Send Reply
+                          {sendingReply ? 'Sending...' : 'Send Reply'}
                         </Button>
                       </div>
                     </div>
                   </div>
                 )}
+
+                <div className="pt-2 border-t">
+                  <Button 
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => handleDeleteInquiry(selectedInquiry)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Inquiry
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="text-center text-muted-foreground py-8">
@@ -369,28 +640,65 @@ export function ClientSupport() {
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="h-20 flex flex-col">
-              <MessageCircle className="h-6 w-6 mb-2" />
-              <span>Create New Inquiry</span>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Inquiry</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this inquiry? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {inquiryToDelete && (
+            <div className="py-4 space-y-2">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Inquiry ID:</span>
+                <span className="text-sm font-medium">{inquiryToDelete.inquiryId}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Client:</span>
+                <span className="text-sm font-medium">{inquiryToDelete.client}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Subject:</span>
+                <span className="text-sm font-medium">{inquiryToDelete.subject}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <Badge className={getStatusColor(inquiryToDelete.status)}>
+                  {inquiryToDelete.status}
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDeleting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <span className="mr-2">Deleting...</span>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Inquiry
+                </>
+              )}
             </Button>
-            <Button variant="outline" className="h-20 flex flex-col">
-              <AlertTriangle className="h-6 w-6 mb-2" />
-              <span>Escalate Issue</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex flex-col">
-              <CheckCircle className="h-6 w-6 mb-2" />
-              <span>Mark as Resolved</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

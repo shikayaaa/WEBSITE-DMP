@@ -4,6 +4,11 @@ import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth"
 import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
+import { initializeApp } from "firebase/app";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+import { getAnalytics } from "firebase/analytics";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -56,14 +61,17 @@ export const getCurrentUser = () => {
   return auth.currentUser;
 };
 
+import { doc, getDoc } from "firebase/firestore"; // ADD THIS IMPORT AT THE TOP
+
 // Helper function to check user role (staff or admin)
 export const getUserRole = async () => {
   const user = auth.currentUser;
   if (!user) return null;
   
   try {
-    const userDoc = await db.collection('users').doc(user.uid).get();
-    return userDoc.exists ? userDoc.data().role : null;
+    const userDocRef = doc(db, 'users', user.uid);
+    const userDoc = await getDoc(userDocRef);
+    return userDoc.exists() ? userDoc.data().role : null;
   } catch (error) {
     console.error('Error getting user role:', error);
     return null;

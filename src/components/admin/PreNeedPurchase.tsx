@@ -37,11 +37,13 @@ interface PreNeedPlan {
 }
 
 interface PackageType {
+  id?: string;  // ADD THIS LINE
   name: string;
   price: number;
   description: string;
+   lotSize?: string;  // ADD THIS LINE
+  category?: string;
 }
-
 export function PreNeedPurchase() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -55,9 +57,16 @@ const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
 const [selectedPackage, setSelectedPackage] = useState<PackageType | null>(null);
+const [packageTypes, setPackageTypes] = useState<PackageType[]>([]);
+const [isLoadingPackages, setIsLoadingPackages] = useState(true);
 const [isViewPackageDialogOpen, setIsViewPackageDialogOpen] = useState(false);
 const [isEditPackageDialogOpen, setIsEditPackageDialogOpen] = useState(false);
-  // Form state
+  const [editPackageData, setEditPackageData] = useState({
+  name: '',
+  price: 0,
+  description: ''
+});
+// Form state
   const [formData, setFormData] = useState({
     clientName: '',
     contact: '',
@@ -70,13 +79,40 @@ const [isEditPackageDialogOpen, setIsEditPackageDialogOpen] = useState(false);
     notes: ''
   });
 
-  const packageTypes: PackageType[] = [
-    { name: 'Basic Package', price: 65000, description: '2x2m lot, basic services' },
-    { name: 'Standard Package', price: 85000, description: '2x3m lot, standard services' },
-    { name: 'Deluxe Memorial Package', price: 95000, description: '3x3m lot, enhanced services' },
-    { name: 'Premium Memorial Package', price: 120000, description: '3x4m lot, premium services' },
-    { name: 'Family Package', price: 150000, description: '4x4m lot, comprehensive services' },
-  ];
+ // Load packages from Firebase
+useEffect(() => {
+  loadPackages();
+}, []);
+
+const loadPackages = async () => {
+  try {
+    setIsLoadingPackages(true);
+    const packagesSnapshot = await getDocs(collection(db, 'packageTypes'));
+    
+    const packages: PackageType[] = [];
+    packagesSnapshot.forEach((doc) => {
+      const data = doc.data();
+     packages.push({
+  id: doc.id,
+  name: data.name || '',
+  price: Number(data.price) || 0,
+  description: data.description || '',
+  lotSize: data.lotSize || '',      // ADD THIS LINE
+  category: data.category || ''      // ADD THIS LINE
+});
+    });
+    
+    // Sort by price (low to high)
+    packages.sort((a, b) => a.price - b.price);
+    
+    setPackageTypes(packages);
+    setIsLoadingPackages(false);
+  } catch (error) {
+    console.error('Error loading packages:', error);
+    alert('❌ Error loading packages from database');
+    setIsLoadingPackages(false);
+  }
+};
 
   // Check user role on mount
   useEffect(() => {
@@ -198,6 +234,46 @@ plans.push({
       }
     }
   };
+ // Migration function to update existing contracts with PN-XXX IDs
+  const migrateContractIds = async () => {
+    if (!confirm('This will update all contracts without a contractId to use the PN-XXX format. Continue?')) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const contractsSnapshot = await getDocs(collection(db, 'preNeedAgreements'));
+      let counter = 1;
+      let updatedCount = 0;
+      
+      for (const contractDoc of contractsSnapshot.docs) {
+        const data = contractDoc.data();
+        
+        // Only update if contractId doesn't exist
+        if (!data.contractId) {
+          const newContractId = `PN-${String(counter).padStart(3, '0')}`;
+          
+          await updateDoc(doc(db, 'preNeedAgreements', contractDoc.id), {
+            contractId: newContractId
+          });
+          
+          console.log(`✅ Updated ${contractDoc.id} to ${newContractId}`);
+          updatedCount++;
+          counter++;
+        } else {
+          counter++;
+        }
+      }
+      
+      alert(`✅ Migration complete! Updated ${updatedCount} contract(s) with PN-XXX IDs`);
+      setIsLoading(false);
+      loadPreNeedPlans(); // Reload to show updated IDs
+    } catch (error) {
+      console.error('Migration error:', error);
+      alert('❌ Migration failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setIsLoading(false);
+    }
+  };
 
   const handleViewPackage = (pkg: PackageType) => {
   setSelectedPackage(pkg);
@@ -206,91 +282,203 @@ plans.push({
 
 const handleEditPackage = (pkg: PackageType) => {
   setSelectedPackage(pkg);
+  setEditPackageData({
+    name: pkg.name,
+    price: pkg.price,
+    description: pkg.description
+  });
   setIsEditPackageDialogOpen(true);
 };
 
-  const handleCreatePlan = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        alert('❌ Error: You must be logged in to create a plan');
-        return;
+const handleSavePackageChanges = async () => {
+  if (!selectedPackage || !selectedPackage.id) return;
+  
+  if (!editPackageData.name || !editPackageData.price || !editPackageData.description) {
+    alert('❌ Error: Please fill in all fields');
+    return;
+  }
+
+  try {
+    await updateDoc(doc(db, 'packageTypes', selectedPackage.id), {
+      name: editPackageData.name,
+      price: editPackageData.price,
+      description: editPackageData.description
+    });
+    
+ alert('✅ Success: Package updated successfully');
+    setIsEditPackageDialogOpen(false);
+    loadPackages();
+  } catch (error) {
+    console.error('Error updating package:', error);
+    alert('❌ Error: Failed to update package');
+  }
+};
+const setupInitialPackages = async () => {
+  if (!confirm('This will create initial package types from official price list in Firebase. Continue?')) {
+    return;
+  }
+
+  try {
+    // Check if packages already exist
+    const existingPackages = await getDocs(collection(db, 'packageTypes'));
+    
+    // Create a Set of existing package names
+    const existingNames = new Set<string>();
+    existingPackages.forEach(doc => {
+      existingNames.add(doc.data().name);
+    });
+
+    const initialPackages = [
+      { name: 'Lawn Area - Prime', price: 79461.00, description: 'Double Tiered Lawn lot in Garden Areas', lotSize: '2x2m', category: 'Lawn Area' },
+      { name: 'Lawn Area - Special Premium', price: 76133.00, description: 'Special Premium lawn lot beside the road', lotSize: '2x2m', category: 'Lawn Area' },
+      { name: 'Lawn Area - Premium', price: 72406.00, description: 'Premium lawn lot nearest to road/walkway', lotSize: '2x2m', category: 'Lawn Area' },
+      { name: 'Lawn Area - Regular', price: 69478.00, description: 'Regular lawn lot', lotSize: '2x2m', category: 'Lawn Area' },
+      { name: 'Memorial Garden - Special Premium', price: 391315.00, description: 'Special Premium memorial garden lot beside road', lotSize: '3x3m', category: 'Memorial Garden' },
+      { name: 'Memorial Garden - Premium', price: 346726.00, description: 'Premium memorial garden lot nearest to road', lotSize: '3x3m', category: 'Memorial Garden' },
+      { name: 'Memorial Garden - Regular', price: 306796.00, description: 'Regular memorial garden lot', lotSize: '3x3m', category: 'Memorial Garden' },
+      { name: 'Garden Family Estate - Special Premium', price: 851308.00, description: 'Special Premium garden family estate', lotSize: '4x4m', category: 'Garden Family Estate' },
+      { name: 'Garden Family Estate - Premium', price: 784093.00, description: 'Premium family estate along walkways', lotSize: '4x4m', category: 'Garden Family Estate' },
+      { name: 'Family Estate - Premier', price: 1927501.00, description: 'Premier Family Estate (Mausoleum)', lotSize: '5x5m', category: 'Family Estate' },
+      { name: 'Family Estate - Prestige', price: 1053473.00, description: 'Prestige Family Estate (Mausoleum)', lotSize: '4x5m', category: 'Family Estate' },
+    ];
+
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    for (const pkg of initialPackages) {
+      // Only add if it doesn't already exist
+      if (!existingNames.has(pkg.name)) {
+        await addDoc(collection(db, 'packageTypes'), pkg);
+        addedCount++;
+      } else {
+        skippedCount++;
       }
-
-      if (!formData.clientName || !formData.contact || !formData.email || !formData.packageType || !formData.term || !formData.startDate) {
-        alert('❌ Error: Please fill in all required fields');
-        return;
-      }
-
-      const selectedPackage = packageTypes.find(pkg => pkg.name === formData.packageType);
-      if (!selectedPackage) return;
-
-      const totalAmount = selectedPackage.price;
-      const downPayment = formData.downPayment || 0;
-      const remainingAfterDown = totalAmount - downPayment;
-      const termMonths = parseInt(formData.term);
-      const monthlyPayment = Math.ceil(remainingAfterDown / termMonths);
-
-      const startDate = new Date(formData.startDate);
-      const endDate = new Date(startDate);
-      endDate.setMonth(endDate.getMonth() + termMonths);
-
-      const lotSizeMap: { [key: string]: string } = {
-        'Basic Package': '2x2m',
-        'Standard Package': '2x3m',
-        'Deluxe Memorial Package': '3x3m',
-        'Premium Memorial Package': '3x4m',
-        'Family Package': '4x4m',
-      };
-
-      // Generate next contract ID
-const existingPlans = await getDocs(collection(db, 'preNeedAgreements'));
-const contractId = `PN-${String(existingPlans.size + 1).padStart(3, '0')}`;
-
-const newPlan: Omit<PreNeedPlan, 'id'> = {
-  contractId: contractId,
-  client: formData.clientName,
-        planType: formData.packageType,
-        lotSize: lotSizeMap[formData.packageType] || '2x2m',
-        totalAmount,
-        downPayment,
-        monthlyPayment,
-        termMonths,
-        paidMonths: downPayment > 0 ? 1 : 0,
-        remainingBalance: remainingAfterDown,
-        status: 'active',
-        startDate: formData.startDate,
-        endDate: endDate.toISOString().split('T')[0],
-        contact: formData.contact,
-        email: formData.email,
-        beneficiary: formData.beneficiary,
-        notes: formData.notes,
-        createdAt: Timestamp.now(),
-        userId: user.uid,
-      };
-
-      await addDoc(collection(db, 'preNeedAgreements'), newPlan);
-
-      alert('✅ Success: Pre-need plan created successfully');
-
-      setFormData({
-        clientName: '',
-        contact: '',
-        email: '',
-        beneficiary: '',
-        packageType: '',
-        downPayment: 0,
-        term: '',
-        startDate: '',
-        notes: ''
-      });
-      setIsDialogOpen(false);
-      loadPreNeedPlans();
-    } catch (error: any) {
-      console.error('Error creating plan:', error);
-      alert(`❌ Error: ${error.message}`);
     }
-  };
+    
+    alert(`✅ Success: Added ${addedCount} new package(s), skipped ${skippedCount} existing package(s)!`);
+    loadPackages();
+  } catch (error) {
+    console.error('Error creating packages:', error);
+    alert('❌ Error: Failed to create initial packages');
+  }
+};
+
+const removeDuplicatePackages = async () => {
+  if (!confirm('This will remove duplicate packages. Continue?')) {
+    return;
+  }
+
+  try {
+    setIsLoadingPackages(true);
+    const packagesSnapshot = await getDocs(collection(db, 'packageTypes'));
+    
+    const seenNames = new Set<string>();
+    const duplicatesToDelete: string[] = [];
+    
+    packagesSnapshot.forEach((doc) => {
+      const data = doc.data();
+      const packageName = data.name;
+      
+      if (seenNames.has(packageName)) {
+        // This is a duplicate
+        duplicatesToDelete.push(doc.id);
+      } else {
+        // First occurrence, keep it
+        seenNames.add(packageName);
+      }
+    });
+    
+    // Delete duplicates
+    for (const docId of duplicatesToDelete) {
+      await deleteDoc(doc(db, 'packageTypes', docId));
+    }
+    
+    alert(`✅ Success: Removed ${duplicatesToDelete.length} duplicate package(s)!`);
+    loadPackages();
+    setIsLoadingPackages(false);
+  } catch (error) {
+    console.error('Error removing duplicates:', error);
+    alert('❌ Error: Failed to remove duplicates');
+    setIsLoadingPackages(false);
+  }
+};
+const handleCreatePlan = async () => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      alert('❌ Error: You must be logged in to create a plan');
+      return;
+    }
+
+    if (!formData.clientName || !formData.contact || !formData.email || !formData.packageType || !formData.term || !formData.startDate) {
+      alert('❌ Error: Please fill in all required fields');
+      return;
+    }
+
+    const selectedPackage = packageTypes.find(pkg => pkg.name === formData.packageType);
+    if (!selectedPackage) return;
+
+    const totalAmount = selectedPackage.price;
+    const downPayment = formData.downPayment || 0;
+    const remainingAfterDown = totalAmount - downPayment;
+    const termMonths = parseInt(formData.term);
+    const monthlyPayment = Math.ceil(remainingAfterDown / termMonths);
+
+    const startDate = new Date(formData.startDate);
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + termMonths);
+
+    // Get lot size from the selected package
+    const lotSize = selectedPackage.lotSize || '2x2m';
+
+    const existingPlans = await getDocs(collection(db, 'preNeedAgreements'));
+    const contractId = `PN-${String(existingPlans.size + 1).padStart(3, '0')}`;
+
+    const newPlan: Omit<PreNeedPlan, 'id'> = {
+      contractId: contractId,
+      client: formData.clientName,
+      planType: formData.packageType,
+lotSize: lotSize,
+      totalAmount,
+      downPayment,
+      monthlyPayment,
+      termMonths,
+      paidMonths: downPayment > 0 ? 1 : 0,
+      remainingBalance: remainingAfterDown,
+      status: 'active',
+      startDate: formData.startDate,
+      endDate: endDate.toISOString().split('T')[0],
+      contact: formData.contact,
+      email: formData.email,
+      beneficiary: formData.beneficiary,
+      notes: formData.notes,
+      createdAt: Timestamp.now(),
+      userId: user.uid,
+    };
+
+    await addDoc(collection(db, 'preNeedAgreements'), newPlan);
+
+    alert('✅ Success: Pre-need plan created successfully');
+
+    setFormData({
+      clientName: '',
+      contact: '',
+      email: '',
+      beneficiary: '',
+      packageType: '',
+      downPayment: 0,
+      term: '',
+      startDate: '',
+      notes: ''
+    });
+    setIsDialogOpen(false);
+    loadPreNeedPlans();
+  } catch (error: any) {
+    console.error('Error creating plan:', error);
+    alert(`❌ Error: ${error.message}`);
+  }
+};
+// Then continue with handleDeletePlan, etc...
 
   const handleDeletePlan = async (planId: string) => {
     if (!confirm('Are you sure you want to delete this plan?')) return;
@@ -366,19 +554,13 @@ const handleSaveEdit = async () => {
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + termMonths);
 
-    const lotSizeMap: { [key: string]: string } = {
-      'Basic Package': '2x2m',
-      'Standard Package': '2x3m',
-      'Deluxe Memorial Package': '3x3m',
-      'Premium Memorial Package': '3x4m',
-      'Family Package': '4x4m',
-    };
-
+    // Get lot size from the selected package
+    const lotSize = selectedPackage.lotSize || '2x2m';
     // Update the document in Firebase
     await updateDoc(doc(db, 'preNeedAgreements', selectedPlan.id), {
       client: formData.clientName,
       planType: formData.packageType,
-      lotSize: lotSizeMap[formData.packageType] || '2x2m',
+lotSize: lotSize,
       totalAmount,
       downPayment,
       monthlyPayment,
@@ -450,132 +632,164 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold">Pre-Need Purchase</h2>
-          <p className="text-gray-600">Manage pre-need memorial plans and contracts</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              New Pre-Need Plan
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Pre-Need Plan</DialogTitle>
-              <DialogDescription>Set up a new pre-need memorial plan for a client</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="client-name">Client Name *</Label>
-                  <Input 
-                    id="client-name" 
-                    placeholder="Enter client name"
-                    value={formData.clientName}
-                    onChange={(e) => setFormData({...formData, clientName: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact">Contact Number *</Label>
-                  <Input 
-                    id="contact" 
-                    placeholder="+63 912 345 6789"
-                    value={formData.contact}
-                    onChange={(e) => setFormData({...formData, contact: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address *</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="client@example.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="beneficiary">Beneficiary</Label>
-                  <Input 
-                    id="beneficiary" 
-                    placeholder="Enter beneficiary name"
-                    value={formData.beneficiary}
-                    onChange={(e) => setFormData({...formData, beneficiary: e.target.value})}
-                  />
-                </div>
-              </div>
+   <div className="space-y-6">
+  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h2 className="text-2xl font-bold">Pre-Need Purchase</h2>
+      <p className="text-gray-600">Manage pre-need memorial plans and contracts</p>
+    </div>
+    
+    {/* BUTTONS - ONLY ONE SECTION */}
+    <div className="flex gap-2">
+      <Button 
+        variant="outline" 
+        onClick={migrateContractIds}
+        className="border-orange-500 text-orange-600 hover:bg-orange-50"
+      >
+        <Download className="h-4 w-4 mr-2" />
+        Migrate IDs
+      </Button>
+      
+    <Button 
+  variant="outline" 
+  onClick={setupInitialPackages}
+  className="border-green-500 text-green-600 hover:bg-green-50"
+>
+  <Download className="h-4 w-4 mr-2" />
+  Setup Packages
+</Button>
+
+<Button 
+  variant="outline" 
+  onClick={removeDuplicatePackages}
+  className="border-red-500 text-red-600 hover:bg-red-50"
+>
+  <Download className="h-4 w-4 mr-2" />
+  Remove Duplicates
+</Button>
+
+<Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogTrigger asChild>
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Plus className="h-4 w-4 mr-2" />
+            New Pre-Need Plan
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Pre-Need Plan</DialogTitle>
+            <DialogDescription>Set up a new pre-need memorial plan for a client</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="package">Package Type *</Label>
-                <Select value={formData.packageType} onValueChange={(value) => setFormData({...formData, packageType: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select package type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {packageTypes.map((pkg, index) => (
-                      <SelectItem key={index} value={pkg.name}>
-                        {pkg.name} - ₱{pkg.price.toLocaleString()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="down-payment">Down Payment (₱)</Label>
-                  <Input 
-                    id="down-payment" 
-                    type="number" 
-                    placeholder="0"
-                    value={formData.downPayment || ''}
-                    onChange={(e) => setFormData({...formData, downPayment: parseFloat(e.target.value) || 0})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="term">Payment Term *</Label>
-                  <Select value={formData.term} onValueChange={(value) => setFormData({...formData, term: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select term" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="6">6 months</SelectItem>
-                      <SelectItem value="12">12 months</SelectItem>
-                      <SelectItem value="18">18 months</SelectItem>
-                      <SelectItem value="24">24 months</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="start-date">Start Date *</Label>
-                  <Input 
-                    id="start-date" 
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea 
-                  id="notes" 
-                  placeholder="Any special requirements or notes..." 
-                  rows={3}
-                  value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                <Label htmlFor="client-name">Client Name *</Label>
+                <Input 
+                  id="client-name" 
+                  placeholder="Enter client name"
+                  value={formData.clientName}
+                  onChange={(e) => setFormData({...formData, clientName: e.target.value})}
                 />
               </div>
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleCreatePlan}>Create Plan</Button>
+              <div className="space-y-2">
+                <Label htmlFor="contact">Contact Number *</Label>
+                <Input 
+                  id="contact" 
+                  placeholder="+63 912 345 6789"
+                  value={formData.contact}
+                  onChange={(e) => setFormData({...formData, contact: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address *</Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="client@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="beneficiary">Beneficiary</Label>
+                <Input 
+                  id="beneficiary" 
+                  placeholder="Enter beneficiary name"
+                  value={formData.beneficiary}
+                  onChange={(e) => setFormData({...formData, beneficiary: e.target.value})}
+                />
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="package">Package Type *</Label>
+              <Select value={formData.packageType} onValueChange={(value) => setFormData({...formData, packageType: value})}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select package type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {packageTypes.map((pkg, index) => (
+                    <SelectItem key={index} value={pkg.name}>
+                      {pkg.name} - ₱{pkg.price.toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="down-payment">Down Payment (₱)</Label>
+                <Input 
+                  id="down-payment" 
+                  type="number" 
+                  placeholder="0"
+                  value={formData.downPayment || ''}
+                  onChange={(e) => setFormData({...formData, downPayment: parseFloat(e.target.value) || 0})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="term">Payment Term *</Label>
+                <Select value={formData.term} onValueChange={(value) => setFormData({...formData, term: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select term" />
+                  </SelectTrigger>
+                 <SelectContent>
+  <SelectItem value="12">12 months</SelectItem>
+  <SelectItem value="36">36 months</SelectItem>
+  <SelectItem value="60">60 months</SelectItem>
+</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="start-date">Start Date *</Label>
+                <Input 
+                  id="start-date" 
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea 
+                id="notes" 
+                placeholder="Any special requirements or notes..." 
+                rows={3}
+                value={formData.notes}
+                onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              />
+            </div>
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleCreatePlan}>Create Plan</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  </div>
+
+  {/* Summary Cards continue here... */}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -711,8 +925,8 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
                                 ></div>
                               </div>
                             </div>
-                          </TableCell><TableCell className="font-medium">₱{plan.remainingBalance.toLocaleString()}</TableCell>
-<TableCell className="font-medium">{plan.remainingBalance.toLocaleString()}</TableCell>
+                        </TableCell>
+<TableCell className="font-medium">₱{plan.remainingBalance.toLocaleString()}</TableCell>
                           <TableCell>
                             <Badge className={getStatusColor(plan.status)}>
                               {plan.status.charAt(0).toUpperCase() + plan.status.slice(1)}
@@ -1001,12 +1215,11 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
             <SelectTrigger>
               <SelectValue placeholder="Select term" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="6">6 months</SelectItem>
-              <SelectItem value="12">12 months</SelectItem>
-              <SelectItem value="18">18 months</SelectItem>
-              <SelectItem value="24">24 months</SelectItem>
-            </SelectContent>
+          <SelectContent>
+  <SelectItem value="12">12 months</SelectItem>
+  <SelectItem value="36">36 months</SelectItem>
+  <SelectItem value="60">60 months</SelectItem>
+</SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
@@ -1078,6 +1291,8 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
   </DialogContent>
 </Dialog>
 
+
+{/* Edit Package Dialog */}
 {/* Edit Package Dialog */}
 <Dialog open={isEditPackageDialogOpen} onOpenChange={setIsEditPackageDialogOpen}>
   <DialogContent className="max-w-2xl">
@@ -1088,33 +1303,45 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
     {selectedPackage && (
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="package-name">Package Name</Label>
-          <Input id="package-name" defaultValue={selectedPackage.name} />
+          <Label htmlFor="package-name">Package Name *</Label>
+          <Input 
+            id="package-name" 
+            value={editPackageData.name}
+            onChange={(e) => setEditPackageData({...editPackageData, name: e.target.value})}
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="package-price">Base Price (₱)</Label>
-          <Input id="package-price" type="number" defaultValue={selectedPackage.price} />
+          <Label htmlFor="package-price">Base Price (₱) *</Label>
+          <Input 
+            id="package-price" 
+            type="number" 
+            value={editPackageData.price}
+            onChange={(e) => setEditPackageData({...editPackageData, price: parseFloat(e.target.value) || 0})}
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="package-description">Description</Label>
-          <Textarea id="package-description" defaultValue={selectedPackage.description} rows={4} />
+          <Label htmlFor="package-description">Description *</Label>
+          <Textarea 
+            id="package-description" 
+            value={editPackageData.description}
+            onChange={(e) => setEditPackageData({...editPackageData, description: e.target.value})}
+            rows={4} 
+          />
         </div>
       </div>
     )}
-  <div className="flex justify-end space-x-2 pt-4">
-  <Button variant="outline" onClick={() => setIsEditPackageDialogOpen(false)}>Cancel</Button>
-  <Button 
-    className="bg-blue-600 hover:bg-blue-700 text-white"
-    onClick={() => {
-      alert('✅ Package updated successfully');
-      setIsEditPackageDialogOpen(false);
-    }}
-  >
-    Save Changes
-  </Button>
-</div>
+    <div className="flex justify-end space-x-2 pt-4">
+      <Button variant="outline" onClick={() => setIsEditPackageDialogOpen(false)}>Cancel</Button>
+      <Button 
+        className="bg-blue-600 hover:bg-blue-700 text-white"
+        onClick={handleSavePackageChanges}
+      >
+        Save Changes
+      </Button>
+    </div>
   </DialogContent>
 </Dialog>
     </div>
   );
 }
+

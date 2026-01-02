@@ -101,50 +101,49 @@ export function SettingsPage() {
       setLoading(false);
     }
   };
-
-  const loadSettings = async () => {
+const loadSettings = async () => {
     try {
       const fetchedSettings = await fetchSettings();
       if (fetchedSettings) {
         setSettings(fetchedSettings);
         
-        // Populate form states
+        // Populate form states with safe defaults
         setGeneralForm({
-          parkName: fetchedSettings.general.parkName,
-          contactEmail: fetchedSettings.general.contactEmail,
-          phone: fetchedSettings.general.phone,
-          timezone: fetchedSettings.general.timezone,
-          address: fetchedSettings.general.address,
-          officeHours: fetchedSettings.general.officeHours,
-          serviceHours: fetchedSettings.general.serviceHours
+          parkName: fetchedSettings.general?.parkName || '',
+          contactEmail: fetchedSettings.general?.contactEmail || '',
+          phone: fetchedSettings.general?.phone || '',
+          timezone: fetchedSettings.general?.timezone || 'asia-manila',
+          address: fetchedSettings.general?.address || '',
+          officeHours: fetchedSettings.general?.officeHours || '',
+          serviceHours: fetchedSettings.general?.serviceHours || ''
         });
 
         setNotificationsForm({
-          emailPaymentReminders: fetchedSettings.notifications.email.paymentReminders,
-          emailIntermentConfirmations: fetchedSettings.notifications.email.intermentConfirmations,
-          emailNewClientRegistration: fetchedSettings.notifications.email.newClientRegistration,
-          systemDailyReports: fetchedSettings.notifications.system.dailyReports,
-          systemMaintenance: fetchedSettings.notifications.system.systemMaintenance,
-          systemLowInventory: fetchedSettings.notifications.system.lowInventory,
-          reminderDays: fetchedSettings.notifications.reminderDays
+          emailPaymentReminders: fetchedSettings.notifications?.email?.paymentReminders ?? true,
+          emailIntermentConfirmations: fetchedSettings.notifications?.email?.intermentConfirmations ?? true,
+          emailNewClientRegistration: fetchedSettings.notifications?.email?.newClientRegistration ?? true,
+          systemDailyReports: fetchedSettings.notifications?.system?.dailyReports ?? true,
+          systemMaintenance: fetchedSettings.notifications?.system?.systemMaintenance ?? true,
+          systemLowInventory: fetchedSettings.notifications?.system?.lowInventory ?? false,
+          reminderDays: fetchedSettings.notifications?.reminderDays ?? 7
         });
 
         setSecurityForm({
-          minLength: fetchedSettings.security.passwordPolicy.minLength,
-          expiryDays: fetchedSettings.security.passwordPolicy.expiryDays,
-          requireSpecialChars: fetchedSettings.security.passwordPolicy.requireSpecialChars,
-          requireNumbers: fetchedSettings.security.passwordPolicy.requireNumbers,
-          require2FA: fetchedSettings.security.passwordPolicy.require2FA,
-          timeoutMinutes: fetchedSettings.security.session.timeoutMinutes,
-          maxLoginAttempts: fetchedSettings.security.session.maxLoginAttempts
+          minLength: fetchedSettings.security?.passwordPolicy?.minLength ?? 8,
+          expiryDays: fetchedSettings.security?.passwordPolicy?.expiryDays ?? 90,
+          requireSpecialChars: fetchedSettings.security?.passwordPolicy?.requireSpecialChars ?? true,
+          requireNumbers: fetchedSettings.security?.passwordPolicy?.requireNumbers ?? true,
+          require2FA: fetchedSettings.security?.passwordPolicy?.require2FA ?? false,
+          timeoutMinutes: fetchedSettings.security?.session?.timeoutMinutes ?? 30,
+          maxLoginAttempts: fetchedSettings.security?.session?.maxLoginAttempts ?? 5
         });
 
         setSystemForm({
-          automaticBackups: fetchedSettings.system.database.automaticBackups,
-          dataRetention: fetchedSettings.system.database.dataRetention,
-          backupTime: fetchedSettings.system.database.backupTime,
-          maintenanceMode: fetchedSettings.system.maintenance.maintenanceMode,
-          debugMode: fetchedSettings.system.maintenance.debugMode
+          automaticBackups: fetchedSettings.system?.database?.automaticBackups ?? true,
+          dataRetention: fetchedSettings.system?.database?.dataRetention ?? true,
+          backupTime: fetchedSettings.system?.database?.backupTime ?? '02:00',
+          maintenanceMode: fetchedSettings.system?.maintenance?.maintenanceMode ?? false,
+          debugMode: fetchedSettings.system?.maintenance?.debugMode ?? false
         });
       }
     } catch (error) {
@@ -750,24 +749,24 @@ export function SettingsPage() {
 
               <div className="space-y-4">
                 <h3 className="font-medium">System Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Version:</p>
-                    <p className="font-medium">{settings?.system.info.version}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Last Updated:</p>
-                    <p className="font-medium">{settings?.system.info.lastUpdated}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Database Size:</p>
-                    <p className="font-medium">{settings?.system.info.databaseSize}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Active Users:</p>
-                    <p className="font-medium">{settings?.system.info.activeUsers}</p>
-                  </div>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+  <div>
+    <p className="text-muted-foreground">Version:</p>
+    <p className="font-medium">{settings?.system?.info?.version || 'N/A'}</p>
+  </div>
+  <div>
+    <p className="text-muted-foreground">Last Updated:</p>
+    <p className="font-medium">{settings?.system?.info?.lastUpdated || 'N/A'}</p>
+  </div>
+  <div>
+    <p className="text-muted-foreground">Database Size:</p>
+    <p className="font-medium">{settings?.system?.info?.databaseSize || 'N/A'}</p>
+  </div>
+  <div>
+    <p className="text-muted-foreground">Active Users:</p>
+    <p className="font-medium">{settings?.system?.info?.activeUsers || 0}</p>
+  </div>
+</div>
               </div>
 
               <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleSaveSystem}>

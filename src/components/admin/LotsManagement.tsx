@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { where, Timestamp } from 'firebase/firestore';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
 import { db } from '../../firebase';
@@ -54,6 +55,20 @@ export function LotsManagement() {
     row: '',
     column: ''
   });
+  const [contacts, setContacts] = useState<any[]>([]);
+
+// Load contacts from Firebase
+useEffect(() => {
+  const contactsRef = collection(db, 'contacts');
+  const unsubscribe = onSnapshot(contactsRef, (snapshot) => {
+    const contactsData: any[] = [];
+    snapshot.forEach((doc) => {
+      contactsData.push({ id: doc.id, ...doc.data() });
+    });
+    setContacts(contactsData);
+  });
+  return () => unsubscribe();
+}, []);
 
   const [lots, setLots] = useState<Lot[]>([]);
 
@@ -178,6 +193,32 @@ export function LotsManagement() {
       };
 
       await updateDoc(lotRef, updateData);
+      // Update contact's relatedLots if client is assigned
+    if (editingLot.client) {
+      try {
+        const contactsQuery = query(
+          collection(db, 'contacts'),
+          where('name', '==', editingLot.client)
+        );
+        const contactsSnapshot = await getDocs(contactsQuery);
+        
+        if (!contactsSnapshot.empty) {
+          const contactDoc = contactsSnapshot.docs[0];
+          const contactData = contactDoc.data();
+          const currentLots = contactData.relatedLots || [];
+          
+          // Add lot ID if not already in the array
+          if (!currentLots.includes(editingLot.id)) {
+            await updateDoc(doc(db, 'contacts', contactDoc.id), {
+              relatedLots: [...currentLots, editingLot.id],
+              updatedAt: Timestamp.now()
+            });
+          }
+        }
+      } catch (contactUpdateError) {
+        console.error('Failed to update contact lots:', contactUpdateError);
+      }
+    }
       
       setEditLotOpen(false);
       setEditingLot(null);
@@ -486,15 +527,25 @@ export function LotsManagement() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="ownerName">Owner Name (Optional)</Label>
-              <Input
-                id="ownerName"
-                placeholder="Enter owner name if applicable"
-                value={newLot.ownerName}
-                onChange={(e) => setNewLot({ ...newLot, ownerName: e.target.value })}
-              />
-            </div>
+   <div className="space-y-2">
+  <Label htmlFor="ownerName">Owner (Optional)</Label>
+  <Select
+    value={newLot.ownerName}
+    onValueChange={(value) => setNewLot({ ...newLot, ownerName: value })}
+  >
+    <SelectTrigger id="ownerName">
+      <SelectValue placeholder="Select contact or leave empty" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="">No Owner</SelectItem>
+      {contacts.map((contact) => (
+        <SelectItem key={contact.id} value={contact.name}>
+          {contact.name} - {contact.email}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
           </div>
           <DialogFooter>
             <Button 

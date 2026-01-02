@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Eye, Edit, Download, FileText, Stamp, Calendar, CheckCircle, User, MapPin } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, onSnapshot, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebase';
 import html2canvas from 'html2canvas';
 
 export function DeedOfSales() {
@@ -27,6 +29,15 @@ export function DeedOfSales() {
   const [selectedDeed, setSelectedDeed] = useState<any>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [templateContent, setTemplateContent] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({
+    clientName: '',
+    lotNumber: '',
+    block: '',
+    amount: '',
+    template: '',
+    notes: ''
+  });
 
   // State to store edited template contents
   const [templateContents, setTemplateContents] = useState<Record<string, string>>({
@@ -175,49 +186,114 @@ export function DeedOfSales() {
   });
 
   // Mock data
-  const [deeds, setDeeds] = useState([
-    {
-      id: 'DOS-2024-001',
-      clientName: 'Roberto Santos',
-      lotNumber: 'A-125',
-      block: 'Section A',
-      saleDate: '2024-01-15',
-      amount: '₱125,000',
+ // Real Firebase data
+const [deeds, setDeeds] = useState<any[]>([]);
 
-    
-      status: 'completed',
-      notarizedBy: 'Atty. Maria Cruz',
-      registrationNumber: 'REG-2024-001',
-      titleNumber: 'TCT-12345',
-      notes: 'Standard single lot sale'
-    },
-    {
-      id: 'DOS-2024-002',
-      clientName: 'Elena Martinez',
-      lotNumber: 'B-089',
-      block: 'Section B',
-      saleDate: '2024-02-20',
-      amount: '₱98,500',
-      status: 'pending',
-      notarizedBy: '',
-      registrationNumber: '',
-      titleNumber: '',
-      notes: 'Awaiting final payment confirmation'
-    },
-    {
-      id: 'DOS-2024-003',
-      clientName: 'Family Garcia',
-      lotNumber: 'C-045',
-      block: 'Section C',
-      saleDate: '2024-03-10',
-      amount: '₱450,000',
-      status: 'completed',
-      notarizedBy: 'Atty. Juan Dela Cruz',
-      registrationNumber: 'REG-2024-015',
-      titleNumber: 'TCT-12389',
-      notes: 'Family plot - 4 units'
-    },
-  ]);
+// Load deeds from Firebase
+useEffect(() => {
+  const loadDeeds = async () => {
+    try {
+      setLoading(true);
+      
+      // DEBUG: Check authentication and role
+      const currentUser = auth.currentUser;
+      console.log('=== DEBUGGING DEED OF SALES ===');
+      console.log('Current User:', currentUser?.email);
+      console.log('Current User UID:', currentUser?.uid);
+      
+      if (!currentUser) {
+        console.error('No user logged in!');
+        toast.error('Please login first');
+        setLoading(false);
+        return;
+      }
+
+      // Check user role in Firestore
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      console.log('User document exists:', userDoc.exists());
+      if (userDoc.exists()) {
+        console.log('User data:', userDoc.data());
+        console.log('User role:', userDoc.data()?.role);
+      } else {
+        console.error('User document not found in Firestore!');
+      }
+
+      // Check if user is in admins collection
+      const adminDocRef = doc(db, 'admins', currentUser.uid);
+      const adminDoc = await getDoc(adminDocRef);
+      console.log('Is in admins collection:', adminDoc.exists());
+
+      // Try to query deeds
+      console.log('Attempting to query deedOfSales collection...');
+      const deedsQuery = query(
+        collection(db, 'deedOfSales'),
+        orderBy('createdAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(
+        deedsQuery,
+        (snapshot) => {
+          console.log('✅ Success! Snapshot received, document count:', snapshot.size);
+          
+          const deedsList: any[] = [];
+          
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            deedsList.push({
+              id: data.deedId || docSnap.id,
+              docId: docSnap.id,
+              clientName: data.clientName || '',
+              lotNumber: data.lotNumber || '',
+              block: data.block || '',
+              saleDate: data.saleDate || '',
+              amount: data.amount || '',
+              status: data.status || 'pending',
+              notarizedBy: data.notarizedBy || '',
+              registrationNumber: data.registrationNumber || '',
+              titleNumber: data.titleNumber || '',
+              notes: data.notes || '',
+              template: data.template || '',
+              createdAt: data.createdAt,
+            });
+          });
+          
+          console.log('Deeds loaded successfully:', deedsList.length);
+          setDeeds(deedsList);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('❌ Firebase snapshot error:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          
+          if (error.code === 'permission-denied') {
+            toast.error('Permission Denied', {
+              description: 'Your account does not have permission to view deeds. Please contact an administrator.'
+            });
+          } else {
+            toast.error('Failed to load deeds', {
+              description: error.message
+            });
+          }
+          
+          setLoading(false);
+        }
+      );
+
+      return () => unsubscribe();
+    } catch (error: any) {
+      console.error('❌ Error in loadDeeds:', error);
+      toast.error('Failed to load deeds', {
+        description: error.message || 'An unexpected error occurred'
+      });
+      setLoading(false);
+    }
+  };
+
+  loadDeeds();
+}, []);
 
   const filteredDeeds = deeds.filter(deed => {
     const matchesSearch = deed.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -234,12 +310,79 @@ export function DeedOfSales() {
     totalValue: '₱673,500'
   };
 
-  const handleCreateDeed = () => {
+
+// ADD THIS LOADING CHECK HERE ↓
+if (loading) {
+  return (
+    <div className="flex items-center justify-center h-96">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading deeds...</p>
+      </div>
+    </div>
+  );
+}
+
+const handleCreateDeed = async () => {
+  try {
+    if (!formData.clientName || !formData.lotNumber || !formData.block || !formData.amount) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // Get current year
+    const currentYear = new Date().getFullYear();
+    
+    // Get all deeds for this year to generate next ID
+    const currentYearDeeds = deeds.filter(deed => 
+      deed.id.startsWith(`DOS-${currentYear}`)
+    );
+    
+    const nextNumber = currentYearDeeds.length + 1;
+    const deedId = `DOS-${currentYear}-${String(nextNumber).padStart(3, '0')}`;
+    
+    // Get current date in YYYY-MM-DD format
+    const today = new Date().toISOString().split('T')[0];
+
+    const newDeed = {
+      deedId: deedId,
+      clientName: formData.clientName,
+      lotNumber: formData.lotNumber,
+      block: formData.block,
+      saleDate: today,
+      amount: formData.amount,
+      status: 'pending',
+      notarizedBy: '',
+      registrationNumber: '',
+      titleNumber: '',
+      notes: formData.notes,
+      template: formData.template,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+
+    await addDoc(collection(db, 'deedOfSales'), newDeed);
+
     toast.success('Deed of Sale created successfully', {
-      description: 'The document has been generated and is ready for notarization'
+      description: `${deedId} has been generated and is ready for notarization`
     });
+
+    // Reset form
+    setFormData({
+      clientName: '',
+      lotNumber: '',
+      block: '',
+      amount: '',
+      template: '',
+      notes: ''
+    });
+
     setCreateDialogOpen(false);
-  };
+  } catch (error) {
+    console.error('Error creating deed:', error);
+    toast.error('Failed to create deed');
+  }
+};
 
   const handleViewDeed = (deed: any) => {
     setSelectedDeed(deed);
@@ -251,18 +394,52 @@ export function DeedOfSales() {
     setEditDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
+ const handleSaveEdit = async () => {
+  try {
+    if (!selectedDeed?.docId) {
+      toast.error('Invalid deed selected');
+      return;
+    }
+
+    const deedRef = doc(db, 'deedOfSales', selectedDeed.docId);
+    
+    await updateDoc(deedRef, {
+      clientName: formData.clientName || selectedDeed.clientName,
+      lotNumber: formData.lotNumber || selectedDeed.lotNumber,
+      block: formData.block || selectedDeed.block,
+      amount: formData.amount || selectedDeed.amount,
+      notes: formData.notes || selectedDeed.notes,
+      updatedAt: Timestamp.now(),
+    });
+
     toast.success('Deed updated successfully', {
       description: 'All changes have been saved'
     });
-    setEditDialogOpen(false);
-  };
 
-  const handleNotarize = (deed: any) => {
-    toast.success('Deed notarized', {
-      description: `${deed.id} has been marked as notarized`
+    setEditDialogOpen(false);
+  } catch (error) {
+    console.error('Error updating deed:', error);
+    toast.error('Failed to update deed');
+  }
+};
+
+ const handleNotarize = async (deed: any) => {
+  try {
+    const deedRef = doc(db, 'deedOfSales', deed.docId);
+    
+    await updateDoc(deedRef, {
+      status: 'completed',
+      updatedAt: Timestamp.now(),
     });
-  };
+
+    toast.success('Deed notarized', {
+      description: `${deed.id} has been marked as completed`
+    });
+  } catch (error) {
+    console.error('Error notarizing deed:', error);
+    toast.error('Failed to update deed status');
+  }
+};
 
   const handleEditTemplate = (templateName: string) => {
     setSelectedTemplate(templateName);
@@ -442,6 +619,7 @@ export function DeedOfSales() {
       description: `${templateName} has been downloaded as PDF on legal-size paper`
     });
   };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -461,46 +639,74 @@ export function DeedOfSales() {
               <DialogTitle>Create New Deed of Sale</DialogTitle>
               <DialogDescription>Enter the details for the new deed of sale document</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="client-name">Client Name</Label>
-                  <Input id="client-name" placeholder="Enter client name" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lot-number">Lot Number</Label>
-                  <Input id="lot-number" placeholder="e.g., A-125" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="block">Block/Section</Label>
-                  <Input id="block" placeholder="e.g., Section A" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Sale Amount</Label>
-                  <Input id="amount" placeholder="₱" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="template">Template</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Standard Deed Template</SelectItem>
-                    <SelectItem value="preneed">Pre-Need Transfer Template</SelectItem>
-                    <SelectItem value="family">Family Plot Template</SelectItem>
-                    <SelectItem value="transfer">Transfer of Rights Template</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notes">Additional Notes</Label>
-                <Textarea id="notes" rows={3} />
-              </div>
-            </div>
+         <div className="space-y-4">
+  <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label htmlFor="client-name">Client Name *</Label>
+      <Input 
+        id="client-name" 
+        placeholder="Enter client name"
+        value={formData.clientName}
+        onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="lot-number">Lot Number *</Label>
+      <Input 
+        id="lot-number" 
+        placeholder="e.g., A-125"
+        value={formData.lotNumber}
+        onChange={(e) => setFormData({...formData, lotNumber: e.target.value})}
+      />
+    </div>
+  </div>
+  <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label htmlFor="block">Block/Section *</Label>
+      <Input 
+        id="block" 
+        placeholder="e.g., Section A"
+        value={formData.block}
+        onChange={(e) => setFormData({...formData, block: e.target.value})}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="amount">Sale Amount *</Label>
+      <Input 
+        id="amount" 
+        placeholder="₱"
+        value={formData.amount}
+        onChange={(e) => setFormData({...formData, amount: e.target.value})}
+      />
+    </div>
+  </div>
+  <div className="space-y-2">
+    <Label htmlFor="template">Template</Label>
+    <Select 
+      value={formData.template}
+      onValueChange={(value) => setFormData({...formData, template: value})}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Select template" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="DEED OF SALE AND CERTIFICATE OF PERPETUAL CARE">Deed of Sale & Perpetual Care</SelectItem>
+        <SelectItem value="PRE-NEED PURCHASE AGREEMENT">Pre-Need Purchase Agreement</SelectItem>
+        <SelectItem value="SERVICE INVOICE">Service Invoice</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+  <div className="space-y-2">
+    <Label htmlFor="notes">Additional Notes</Label>
+    <Textarea 
+      id="notes" 
+      rows={3}
+      value={formData.notes}
+      onChange={(e) => setFormData({...formData, notes: e.target.value})}
+    />
+  </div>
+</div>
+        
             <DialogFooter>
               <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleCreateDeed} className="bg-blue-600 hover:bg-blue-700">Generate Deed</Button>

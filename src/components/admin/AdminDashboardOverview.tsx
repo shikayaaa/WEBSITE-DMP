@@ -55,11 +55,21 @@ export function AdminDashboardOverview() {
       const agreementsSnapshot = await getDocs(agreementsQuery);
 
       // Get all completed payments
-      const paymentsQuery = query(
-        collection(db, 'payments'),
-        where('status', '==', 'completed')
-      );
-      const paymentsSnapshot = await getDocs(paymentsQuery);
+    const paymentsQuery = query(
+  collection(db, 'payments'),
+  limit(20)
+);
+const paymentsSnapshot = await getDocs(paymentsQuery);
+
+// Sort in memory after fetching
+const sortedPayments = paymentsSnapshot.docs
+  .filter(doc => doc.data().status === 'completed')
+  .sort((a, b) => {
+    const timeA = a.data().paidAt?.toMillis?.() || 0;
+    const timeB = b.data().paidAt?.toMillis?.() || 0;
+    return timeB - timeA;
+  })
+  .slice(0, 5);
 
       // Calculate total revenue
       let totalRevenue = 0;
@@ -191,7 +201,7 @@ export function AdminDashboardOverview() {
           action: `Payment received - ${data.paymentType || 'Payment'}`,
           client: userName,
           amount: `₱${formatNumber(data.amount || 0)}`,
-          time: getTimeAgo(data.paidAt),
+       time: formatTimestamp(data.createdAt),
           type: 'payment',
           color: 'bg-green-500',
           timestamp: data.paidAt,
@@ -214,7 +224,7 @@ export function AdminDashboardOverview() {
           action: 'New plan purchased',
           client: data.fullName || data.userEmail || 'Unknown',
           amount: data.totalPrice || '₱0',
-          time: getTimeAgo(data.createdAt),
+        time: formatTimestamp(data.paidAt),  // ← FIXED
           type: 'agreement',
           color: 'bg-blue-500',
           timestamp: data.createdAt,
@@ -349,28 +359,23 @@ export function AdminDashboardOverview() {
   };
 
   // Helper function to get relative time
-  const getTimeAgo = (timestamp) => {
-    if (!timestamp) return 'Unknown';
+ const formatTimestamp = (timestamp) => {
+  if (!timestamp) return 'Unknown';
+  
+  try {
+    const date = timestamp.toDate();
+    const now = new Date();
+    const diffInHours = Math.floor((Number(now) - Number(date)) / (1000 * 60 * 60));
     
-    try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      const now = new Date();
-      const diffMs = now - date;
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffMins < 1) return 'Just now';
-      if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
-      if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
-      if (diffDays === 1) return '1 day ago';
-      if (diffDays < 30) return `${diffDays} days ago`;
-      return date.toLocaleDateString();
-    } catch (error) {
-      console.error('Error in getTimeAgo:', error);
-      return 'Unknown';
-    }
-  };
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours} hours ago`;
+    if (diffInHours < 48) return '1 day ago';
+    const days = Math.floor(diffInHours / 24);
+    return `${days} days ago`;
+  } catch (err) {
+    return 'Unknown';
+  }
+};
 
   // Helper function to format dates
   const formatDate = (date) => {

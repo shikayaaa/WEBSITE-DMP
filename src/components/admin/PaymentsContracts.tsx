@@ -8,18 +8,10 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { toast } from 'sonner';
-import { 
-  collection, 
-  query, 
-  getDocs, 
-  doc, 
-  getDoc,
-  where,
-  orderBy,
-  Timestamp,
-} from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, orderBy, updateDoc, Timestamp, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 interface Payment {
@@ -80,7 +72,9 @@ export function PaymentsContracts() {
   const [loading, setLoading] = useState(true);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
-  
+  const [updateDueDateDialogOpen, setUpdateDueDateDialogOpen] = useState(false);
+const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+const [newDueDate, setNewDueDate] = useState('');
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [showContractDetails, setShowContractDetails] = useState(false);
@@ -261,29 +255,60 @@ const loadContracts = async () => {
       const contractId = data.contractId || `CON-${String(contractCounter).padStart(3, '0')}`;
       contractCounter++;
       
-      contractsList.push({
-        id: contractId,
-          client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
-          clientId: data.userId,
-          lot: data.lotNumber || 'N/A',
-          date: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A',
-          status: remainingBalance === 0 ? 'completed' : 'active',
-          type: data.planType || 'burial',
-          email: userData.email || 'N/A',
-          phone: userData.phoneNumber || 'N/A',
-          address: userData.address || 'N/A',
-          lotSize: data.lotSize || '2m x 1m',
-          lotLocation: data.lotLocation || `Section ${data.section || 'A'}`,
-          totalAmount,
-          downPayment,
-          monthlyPayment: data.monthlyPayment || 0,
-          paymentTerm: data.paymentTerm || '12 months',
-          amountPaid,
-          remainingBalance,
-          nextPaymentDate: data.nextPaymentDate || 'N/A',
-          expiryDate: data.expiryDate || 'N/A',
-          terms: data.terms || 'Standard contract terms and conditions apply.',
-        });
+    contractsList.push({
+  id: contractId,
+  client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
+  clientId: data.userId,
+  lot: data.lotNumber || 'N/A',
+  date: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A',
+  status: remainingBalance === 0 ? 'completed' : 'active',
+  type: data.planType || 'burial',
+  email: userData.email || 'N/A',
+  phone: userData.phoneNumber || 'N/A',
+  address: userData.address || 'N/A',
+  lotSize: data.lotSize || '2m x 1m',
+  lotLocation: data.lotLocation || `Section ${data.section || 'A'}`,
+  totalAmount,
+  downPayment,
+  monthlyPayment: data.monthlyPayment || 0,
+  paymentTerm: data.paymentTerm || '12 months',
+  amountPaid,
+  remainingBalance,
+  nextPaymentDate: data.nextPaymentDate || 'N/A',
+  expiryDate: data.expiryDate || 'N/A',
+  terms: data.terms || 'Standard contract terms and conditions apply.',
+});
+
+// 🔗 CREATE/UPDATE PAYMENT SUMMARY TO LINK WITH CONTRACT
+try {
+  const paymentSummaryRef = doc(db, 'users', data.userId, 'payments', 'summary');
+  const paymentSummarySnap = await getDoc(paymentSummaryRef);
+  
+  if (!paymentSummarySnap.exists()) {
+    // Create payment summary if it doesn't exist
+    await setDoc(paymentSummaryRef, {
+      contractId: contractId,
+      paymentId: `PAY-${String(contractCounter).padStart(3, '0')}`,
+      lotNumber: data.lotNumber || 'N/A',
+      totalAmount: totalAmount,
+      totalPaid: amountPaid,
+      remainingBalance: remainingBalance,
+      nextDueDate: data.nextPaymentDate || new Date().toISOString().split('T')[0],
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    console.log(`✅ Created payment summary for ${contractId}`);
+  } else {
+    // Update existing payment summary with contract ID
+    await updateDoc(paymentSummaryRef, {
+      contractId: contractId,
+      updatedAt: Timestamp.now(),
+    });
+    console.log(`✅ Updated payment summary with ${contractId}`);
+  }
+} catch (error) {
+  console.error(`❌ Error linking payment to contract ${contractId}:`, error);
+}
       }
       
   // Sort by contract ID to maintain order
@@ -294,6 +319,37 @@ const loadContracts = async () => {
       console.error('Error loading contracts:', error);
     }
   };
+  const handleUpdateDueDate = async () => {
+  if (!selectedPayment || !newDueDate) {
+    toast.error('Please select a valid date');
+    return;
+  }
+
+  try {
+    // Update in Firebase
+    const paymentSummaryRef = doc(db, 'users', selectedPayment.clientId, 'payments', 'summary');
+    
+    await updateDoc(paymentSummaryRef, {
+      nextDueDate: newDueDate,
+      updatedAt: Timestamp.now(),
+    });
+
+    toast.success('Due date updated successfully', {
+      description: `New due date: ${new Date(newDueDate).toLocaleDateString()}`
+    });
+
+    // Reload payments to reflect changes
+    await loadPayments();
+
+    // Close dialog
+    setUpdateDueDateDialogOpen(false);
+    setSelectedPayment(null);
+    setNewDueDate('');
+  } catch (error) {
+    console.error('Error updating due date:', error);
+    toast.error('Failed to update due date');
+  }
+};
 
   // Load payment history for a specific user
   const loadPaymentHistory = async (clientId: string): Promise<PaymentHistory[]> => {
@@ -528,18 +584,30 @@ const overduePayments = payments.filter(p => p.status === 'overdue').length;
                             {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleViewHistory(payment)}
-                              title="View Payment History"
-                            >
-                              <History className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                      <TableCell>
+  <div className="flex items-center space-x-2">
+    <Button 
+      variant="ghost" 
+      size="sm"
+      onClick={() => {
+        setSelectedPayment(payment);
+        setNewDueDate(payment.dueDate !== 'N/A' ? payment.dueDate : '');
+        setUpdateDueDateDialogOpen(true);
+      }}
+      title="Update Due Date"
+    >
+      <Calendar className="h-4 w-4" />
+    </Button>
+    <Button 
+      variant="ghost" 
+      size="sm"
+      onClick={() => handleViewHistory(payment)}
+      title="View Payment History"
+    >
+      <History className="h-4 w-4" />
+    </Button>
+  </div>
+</TableCell>
                       </TableRow>
                     ))
                   ) : (
@@ -596,18 +664,19 @@ const overduePayments = payments.filter(p => p.status === 'overdue').length;
                             {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleViewContract(contract)}
-                              title="View Contract Details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                 <TableCell>
+  <div className="flex items-center gap-2">
+    <Button 
+      variant="ghost" 
+      size="sm"
+      onClick={() => handleViewContract(contract)}
+      title="View Contract"
+    >
+      <Eye className="h-4 w-4" />
+    </Button>
+   
+  </div>
+</TableCell>
                       </TableRow>
                     ))
                   ) : (
@@ -951,6 +1020,59 @@ const overduePayments = payments.filter(p => p.status === 'overdue').length;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Update Due Date Dialog */}
+<Dialog open={updateDueDateDialogOpen} onOpenChange={setUpdateDueDateDialogOpen}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Update Due Date</DialogTitle>
+      <DialogDescription>
+        Update the next payment due date for {selectedPayment?.client}
+      </DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="current-due-date">Current Due Date</Label>
+        <Input
+          id="current-due-date"
+          value={selectedPayment?.dueDate || 'N/A'}
+          disabled
+          className="bg-muted"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="new-due-date">New Due Date *</Label>
+        <Input
+          id="new-due-date"
+          type="date"
+          value={newDueDate}
+          onChange={(e) => setNewDueDate(e.target.value)}
+          min={new Date().toISOString().split('T')[0]} // Prevent past dates
+        />
+      </div>
+      <div className="bg-blue-50 p-3 rounded-md">
+        <p className="text-sm text-blue-800">
+          <strong>Note:</strong> Updating the due date will automatically recalculate the payment status (Pending, Overdue, etc.)
+        </p>
+      </div>
+    </div>
+    <DialogFooter>
+      <Button 
+        variant="outline" 
+        onClick={() => {
+          setUpdateDueDateDialogOpen(false);
+          setSelectedPayment(null);
+          setNewDueDate('');
+        }}
+      >
+        Cancel
+      </Button>
+      <Button onClick={handleUpdateDueDate} className="bg-blue-600 hover:bg-blue-700">
+        Update Due Date
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </div>
   );
 }

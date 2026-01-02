@@ -13,9 +13,13 @@ import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { FileText } from 'lucide-react';
+import { ContractGenerator } from './ContractGenerator';
+
 
 interface Contact {
   id: string;
+  userId?: string; // Link to user account
   name: string;
   email: string;
   phone: string;
@@ -23,6 +27,7 @@ interface Contact {
   type: 'client' | 'lead' | 'beneficiary';
   status: 'active' | 'inactive';
   relatedLots?: string[];
+    relatedContracts?: string[]; // ADD THIS
   joinedDate: string;
   notes?: string;
   createdAt?: any;
@@ -38,6 +43,8 @@ export function ContactsManagement() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [contractGeneratorOpen, setContractGeneratorOpen] = useState(false);
+const [selectedContactForContract, setSelectedContactForContract] = useState<Contact | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
 
@@ -65,13 +72,13 @@ export function ContactsManagement() {
         orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(contactsQuery);
-      
-      const contactsData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name || '',
-          email: data.email || '',
+   const contactsData = snapshot.docs.map(doc => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    userId: data.userId || undefined, // Link to user account
+    name: data.name || '',
+    email: data.email || '',
           phone: data.phone || '',
           address: data.address || '',
           type: data.type || 'client',
@@ -639,26 +646,38 @@ export function ContactsManagement() {
               )}
             </div>
           )}
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setViewContactOpen(false)}>
-              Close
-            </Button>
-            <Button 
-              variant="outline"
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              onClick={() => selectedContact && openDeleteDialog(selectedContact)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
-            <Button 
-              className="bg-primary hover:bg-primary/90" 
-              onClick={() => selectedContact && openEditDialog(selectedContact)}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Contact
-            </Button>
-          </DialogFooter>
+        <DialogFooter className="flex gap-2">
+  <Button variant="outline" onClick={() => setViewContactOpen(false)}>
+    Close
+  </Button>
+  <Button 
+    variant="outline"
+    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+    onClick={() => {
+      setSelectedContactForContract(selectedContact);
+      setViewContactOpen(false);
+      setContractGeneratorOpen(true);
+    }}
+  >
+    <FileText className="h-4 w-4 mr-2" />
+    Create Contract
+  </Button>
+  <Button 
+    variant="outline"
+    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+    onClick={() => selectedContact && openDeleteDialog(selectedContact)}
+  >
+    <Trash2 className="h-4 w-4 mr-2" />
+    Delete
+  </Button>
+  <Button 
+    className="bg-primary hover:bg-primary/90" 
+    onClick={() => selectedContact && openEditDialog(selectedContact)}
+  >
+    <Edit className="h-4 w-4 mr-2" />
+    Edit Contact
+  </Button>
+</DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -741,6 +760,20 @@ export function ContactsManagement() {
           )}
         </CardContent>
       </Card>
+      {/* Contract Generator Dialog */}
+<ContractGenerator
+  isOpen={contractGeneratorOpen}
+  onClose={() => {
+    setContractGeneratorOpen(false);
+    setSelectedContactForContract(null);
+  }}
+  installmentPlans={[]} // You'll need to pass actual plans here
+  preselectedContact={selectedContactForContract}
+/>
     </div>
   );
 }
+
+
+
+

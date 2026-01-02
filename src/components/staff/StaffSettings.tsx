@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../../firebase'; // Adjust path to your firebase config
+import { onAuthStateChanged } from 'firebase/auth';
 import { Building, CreditCard, Settings, Save, User, Bell, Lock, Globe, Palette } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -12,7 +15,41 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
 
 export function StaffSettings() {
-  const [settings, setSettings] = useState({
+  const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+const [settings, setSettings] = useState<{
+    companyName: string;
+    companyAddress: string;
+    companyPhone: string;
+    companyEmail: string;
+    companyWebsite: string;
+    businessLicense: string;
+    acceptCash: boolean;
+    acceptBankTransfer: boolean;
+    acceptCheck: boolean;
+    acceptCreditCard: boolean;
+    paypalEnabled: boolean;
+    gcashEnabled: boolean;
+    mayaEnabled: boolean;
+    currency: string;
+    dateFormat: string;
+    timeFormat: string;
+    timezone: string;
+    language: string;
+    emailNotifications: boolean;
+    paymentReminders: boolean;
+    overdueAlerts: boolean;
+    systemUpdates: boolean;
+    marketingEmails: boolean;
+    twoFactorAuth: boolean;
+    sessionTimeout: string;
+    passwordExpiry: string;
+    theme: string;
+    sidebarCollapsed: boolean;
+    showQuickActions: boolean;
+    [key: string]: any;
+  }>({
+    
     // Company Information
     companyName: 'Dumaguete Memorial Park',
     companyAddress: '123 Memorial Drive, Dumaguete City, Negros Oriental',
@@ -61,20 +98,190 @@ export function StaffSettings() {
       [key]: value
     }));
   };
+  // Apply theme changes
+  useEffect(() => {
+    if (settings.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else if (settings.theme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else if (settings.theme === 'auto') {
+      // Auto theme based on system preference
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+  }, [settings.theme]);
+// Auth state listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUserId(user.uid);
+      } else {
+        setCurrentUserId(null);
+        setLoading(false);
+      }
+    });
 
-  const handleSave = () => {
-    // In a real app, this would save to the backend
-    alert('Settings saved successfully!');
+    return () => unsubscribe();
+  }, []);
+
+  // Load settings from Firebase
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const loadSettings = async () => {
+      try {
+        setLoading(true);
+        
+        // Load company settings (shared)
+        const companyRef = doc(db, 'company_settings', 'config');
+        const companySnap = await getDoc(companyRef);
+        
+        // Load user-specific settings
+        const userSettingsRef = doc(db, 'staff_settings', currentUserId);
+        const userSettingsSnap = await getDoc(userSettingsRef);
+
+        if (companySnap.exists() || userSettingsSnap.exists()) {
+          setSettings(prev => ({
+            ...prev,
+            ...(companySnap.data() || {}),
+            ...(userSettingsSnap.data() || {})
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        alert('Failed to load settings. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+
+    // Real-time listener for company settings
+    const companyRef = doc(db, 'company_settings', 'config');
+    const unsubscribe = onSnapshot(companyRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setSettings(prev => ({
+          ...prev,
+          ...snapshot.data()
+        }));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUserId]);
+const handleSave = async () => {
+    if (!currentUserId) {
+      alert('You must be logged in to save settings.');
+      return;
+    }
+
+    // Basic validation
+    if (!settings.companyName.trim()) {
+      alert('Company name is required.');
+      return;
+    }
+
+    if (!settings.companyEmail.trim() || !settings.companyEmail.includes('@')) {
+      alert('Valid company email is required.');
+      return;
+    }
+
+    try {
+      setLoading(true); // Show loading state during save
+
+      // Separate company-wide settings from user-specific settings
+      const companySettings = {
+        companyName: settings.companyName,
+        companyAddress: settings.companyAddress,
+        companyPhone: settings.companyPhone,
+        companyEmail: settings.companyEmail,
+        companyWebsite: settings.companyWebsite,
+        businessLicense: settings.businessLicense,
+        acceptCash: settings.acceptCash,
+        acceptBankTransfer: settings.acceptBankTransfer,
+        acceptCheck: settings.acceptCheck,
+        acceptCreditCard: settings.acceptCreditCard,
+        paypalEnabled: settings.paypalEnabled,
+        gcashEnabled: settings.gcashEnabled,
+        mayaEnabled: settings.mayaEnabled,
+        currency: settings.currency,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUserId
+      };
+
+      const userSettings = {
+        dateFormat: settings.dateFormat,
+        timeFormat: settings.timeFormat,
+        timezone: settings.timezone,
+        language: settings.language,
+        emailNotifications: settings.emailNotifications,
+        paymentReminders: settings.paymentReminders,
+        overdueAlerts: settings.overdueAlerts,
+        systemUpdates: settings.systemUpdates,
+        marketingEmails: settings.marketingEmails,
+        twoFactorAuth: settings.twoFactorAuth,
+        sessionTimeout: settings.sessionTimeout,
+        passwordExpiry: settings.passwordExpiry,
+        theme: settings.theme,
+        sidebarCollapsed: settings.sidebarCollapsed,
+        showQuickActions: settings.showQuickActions,
+        updatedAt: new Date().toISOString()
+      };
+
+      // Try to save company settings (might fail if user is not admin/staff)
+      try {
+        const companyRef = doc(db, 'company_settings', 'config');
+        await setDoc(companyRef, companySettings, { merge: true });
+      } catch (companyError: any) {
+        console.warn('Could not save company settings:', companyError);
+        // Continue to save user settings even if company settings fail
+        if (companyError.code === 'permission-denied') {
+          alert('Note: You do not have permission to update company settings. Only your personal preferences will be saved.');
+        }
+      }
+
+      // Save user-specific settings (should always work for own settings)
+      const userSettingsRef = doc(db, 'staff_settings', currentUserId);
+      await setDoc(userSettingsRef, userSettings, { merge: true });
+
+      // Log activity
+      try {
+        const activityRef = doc(db, 'activityLogs', `${Date.now()}_${currentUserId}`);
+        await setDoc(activityRef, {
+          userId: currentUserId,
+          action: 'settings_updated',
+          timestamp: new Date().toISOString(),
+          details: 'Staff updated system settings'
+        });
+      } catch (logError) {
+        console.warn('Could not log activity:', logError);
+        // Don't fail the entire save operation if logging fails
+      }
+
+      alert('Settings saved successfully!');
+    } catch (error: any) {
+      console.error('Error saving settings:', error);
+      
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. You may not have the necessary permissions to save these settings. Please contact your administrator.');
+      } else if (error.code === 'unavailable') {
+        alert('Network error. Please check your connection and try again.');
+      } else {
+        alert(`Failed to save settings: ${error.message || 'Unknown error'}. Please try again.`);
+      }
+    } finally {
+      setLoading(false); // Always stop loading state
+    }
   };
-
   const paymentGateways = [
     { key: 'acceptCash', label: 'Cash Payments', description: 'Accept cash payments at the office' },
     { key: 'acceptBankTransfer', label: 'Bank Transfer', description: 'Direct bank transfers and deposits' },
-    { key: 'acceptCheck', label: 'Check Payments', description: 'Personal and company checks' },
-    { key: 'acceptCreditCard', label: 'Credit/Debit Cards', description: 'Visa, Mastercard, etc.' },
     { key: 'gcashEnabled', label: 'GCash', description: 'Mobile wallet payments via GCash' },
-    { key: 'paypalEnabled', label: 'PayPal', description: 'Online payments via PayPal' },
-    { key: 'mayaEnabled', label: 'Maya (PayMaya)', description: 'Digital wallet payments via Maya' }
   ];
 
   const notificationSettings = [
@@ -88,9 +295,15 @@ export function StaffSettings() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
+    <div>
         <h1 className="text-2xl font-bold">Settings & Configuration</h1>
         <p className="text-muted-foreground">Manage system settings and preferences</p>
+        {loading && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span>Saving changes...</span>
+          </div>
+        )}
       </div>
 
       <Tabs defaultValue="company" className="w-full">
@@ -110,10 +323,6 @@ export function StaffSettings() {
                   <TabsTrigger value="payments" className="justify-start">
                     <CreditCard className="h-4 w-4 mr-2" />
                     Payments
-                  </TabsTrigger>
-                  <TabsTrigger value="system" className="justify-start">
-                    <Settings className="h-4 w-4 mr-2" />
-                    System
                   </TabsTrigger>
                   <TabsTrigger value="notifications" className="justify-start">
                     <Bell className="h-4 w-4 mr-2" />
@@ -202,9 +411,9 @@ export function StaffSettings() {
                     />
                   </div>
 
-                  <Button onClick={handleSave}>
+              <Button onClick={handleSave} disabled={loading}>
                     <Save className="h-4 w-4 mr-2" />
-                    Save Company Information
+                    {loading ? 'Saving...' : 'Save Company Information'}
                   </Button>
                 </CardContent>
               </Card>
@@ -240,110 +449,17 @@ export function StaffSettings() {
                     ))}
                   </div>
 
-                  <Separator />
+      
 
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Payment Settings</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="currency">Default Currency</Label>
-                        <Select value={settings.currency} onValueChange={(value) => handleSettingChange('currency', value)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="PHP">Philippine Peso (₱)</SelectItem>
-                            <SelectItem value="USD">US Dollar ($)</SelectItem>
-                            <SelectItem value="EUR">Euro (€)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button onClick={handleSave}>
+              <Button onClick={handleSave} disabled={loading}>
                     <Save className="h-4 w-4 mr-2" />
-                    Save Payment Settings
+                    {loading ? 'Saving...' : 'Save Payment Settings'}
                   </Button>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* System Preferences */}
-            <TabsContent value="system">
-              <Card>
-                <CardHeader>
-                  <CardTitle>System Preferences</CardTitle>
-                  <CardDescription>
-                    Configure general system settings and regional preferences
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="dateFormat">Date Format</Label>
-                      <Select value={settings.dateFormat} onValueChange={(value) => handleSettingChange('dateFormat', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="MM/dd/yyyy">MM/dd/yyyy</SelectItem>
-                          <SelectItem value="dd/MM/yyyy">dd/MM/yyyy</SelectItem>
-                          <SelectItem value="yyyy-MM-dd">yyyy-MM-dd</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="timeFormat">Time Format</Label>
-                      <Select value={settings.timeFormat} onValueChange={(value) => handleSettingChange('timeFormat', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="12h">12-hour (AM/PM)</SelectItem>
-                          <SelectItem value="24h">24-hour</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="timezone">Timezone</Label>
-                      <Select value={settings.timezone} onValueChange={(value) => handleSettingChange('timezone', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Asia/Manila">Asia/Manila (GMT+8)</SelectItem>
-                          <SelectItem value="UTC">UTC (GMT+0)</SelectItem>
-                          <SelectItem value="America/New_York">America/New_York (EST)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="language">Language</Label>
-                      <Select value={settings.language} onValueChange={(value) => handleSettingChange('language', value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="en">English</SelectItem>
-                          <SelectItem value="fil">Filipino</SelectItem>
-                          <SelectItem value="ceb">Cebuano</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <Button onClick={handleSave}>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save System Preferences
-                  </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
+       
             {/* Notifications */}
             <TabsContent value="notifications">
               <Card>
@@ -369,9 +485,9 @@ export function StaffSettings() {
                     ))}
                   </div>
 
-                  <Button onClick={handleSave}>
+            <Button onClick={handleSave} disabled={loading}>
                     <Save className="h-4 w-4 mr-2" />
-                    Save Notification Settings
+                    {loading ? 'Saving...' : 'Save Notification Settings'}
                   </Button>
                 </CardContent>
               </Card>
@@ -431,10 +547,9 @@ export function StaffSettings() {
                       </Select>
                     </div>
                   </div>
-
-                  <Button onClick={handleSave}>
+<Button onClick={handleSave} disabled={loading}>
                     <Save className="h-4 w-4 mr-2" />
-                    Save Security Settings
+                    {loading ? 'Saving...' : 'Save Security Settings'}
                   </Button>
                 </CardContent>
               </Card>
@@ -488,9 +603,9 @@ export function StaffSettings() {
                     </div>
                   </div>
 
-                  <Button onClick={handleSave}>
+             <Button onClick={handleSave} disabled={loading}>
                     <Save className="h-4 w-4 mr-2" />
-                    Save Display Preferences
+                    {loading ? 'Saving...' : 'Save Display Preferences'}
                   </Button>
                 </CardContent>
               </Card>

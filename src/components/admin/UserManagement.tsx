@@ -20,8 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { toast } from "sonner";
-import { collection, query, getDocs, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
-import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
+import { collection, query, getDocs, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDoc, serverTimestamp, onSnapshot, addDoc } from "firebase/firestore";import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
 import { db } from "../../firebase";
 
 interface User {
@@ -218,17 +217,41 @@ export function UserManagement() {
       const userCredential = await createUserWithEmailAndPassword(auth, newUser.email, newUser.password);
       const userId = userCredential.user.uid;
       const now = Timestamp.now();
-      await setDoc(doc(db, 'users', userId), {
-        email: newUser.email,
-        displayName: newUser.name,
-        fullName: newUser.name,
-        createdAt: now,
-        createdBy: `${adminName} (${currentAdminEmail})`,
-        lastActive: now,
-        lastLogin: null,
-        lastLogout: null,
-        role: newUser.role,
-      });
+  await setDoc(doc(db, 'users', userId), {
+  email: newUser.email,
+  displayName: newUser.name,
+  fullName: newUser.name,
+  createdAt: now,
+  createdBy: `${adminName} (${currentAdminEmail})`,
+  lastActive: now,
+  lastLogin: null,
+  lastLogout: null,
+  role: newUser.role,
+});
+
+// Auto-create contact for client users
+if (newUser.role === 'client') {
+  try {
+    await addDoc(collection(db, 'contacts'), {
+      userId: userId, // Link to user account
+      name: newUser.name,
+      email: newUser.email,
+      phone: '', // Will be filled later
+      address: '', // Will be filled later
+      type: 'client',
+      status: 'active',
+      relatedLots: [],
+      joinedDate: new Date().toISOString(),
+      notes: `Account created by ${adminName}`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.log('Auto-created contact for client user');
+  } catch (contactError) {
+    console.error('Failed to auto-create contact:', contactError);
+    // Don't fail the user creation if contact creation fails
+  }
+}
       if (newUser.role === 'admin') {
         await setDoc(doc(db, 'admins', userId), {
           email: newUser.email,

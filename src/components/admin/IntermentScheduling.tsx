@@ -20,10 +20,14 @@ import {
   orderBy,
   onSnapshot,
 } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db, auth } from '../../firebase';
+import { updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { Pencil, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 
 interface Interment {
   id: string;
+   userId: string;  // ADD THIS
   client: string;
   deceased: string;
   date: string;
@@ -42,7 +46,10 @@ export function IntermentScheduling() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
+  const [editingInterment, setEditingInterment] = useState<Interment | null>(null);
+const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+const [intermentToDelete, setIntermentToDelete] = useState<Interment | null>(null);
+const [deleting, setDeleting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -69,13 +76,14 @@ export function IntermentScheduling() {
       orderBy('date', 'asc')
     );
     
-    return onSnapshot(intermentQuery, (snapshot) => {
-      const intermentsList: Interment[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        intermentsList.push({
-          id: doc.id,
-          client: data.client || '',
+   return onSnapshot(intermentQuery, (snapshot) => {
+  const intermentsList: Interment[] = [];
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    intermentsList.push({
+      id: doc.id,
+      userId: data.userId || '',  // ADD THIS LINE
+      client: data.client || '',
           deceased: data.deceased || '',
           date: data.date || '',
           time: data.time || '',
@@ -102,15 +110,15 @@ export function IntermentScheduling() {
         collection(db, 'interments'),
         orderBy('date', 'asc')
       );
-      
       const intermentSnapshot = await getDocs(intermentQuery);
       const intermentsList: Interment[] = [];
 
       intermentSnapshot.forEach((doc) => {
         const data = doc.data();
-        intermentsList.push({
-          id: doc.id,
-          client: data.client || '',
+     intermentsList.push({
+  id: doc.id,
+  userId: data.userId || '',  // ADD THIS LINE
+  client: data.client || '',
           deceased: data.deceased || '',
           date: data.date || '',
           time: data.time || '',
@@ -121,7 +129,6 @@ export function IntermentScheduling() {
           createdAt: data.createdAt,
         });
       });
-
       setInterments(intermentsList);
       setLoading(false);
     } catch (error) {
@@ -130,65 +137,157 @@ export function IntermentScheduling() {
       setLoading(false);
     }
   };
+// Handle form submission
+const handleScheduleInterment = async () => {
+  // Validate form
+  if (!formData.client || !formData.deceased || !formData.lot || !formData.date || !formData.time || !formData.contact) {
+    toast.error('Please fill in all required fields');
+    return;
+  }
+  setSubmitting(true);
+  try {
+    // Add to Firebase FIRST
+ const docRef = await addDoc(collection(db, 'interments'), {
+  userId: auth.currentUser?.uid,  // ADD THIS LINE
+  client: formData.client,
+  deceased: formData.deceased,
+      lot: formData.lot,
+      date: formData.date,
+      time: formData.time,
+      contact: formData.contact,
+      notes: formData.notes,
+      status: formData.status,
+      createdAt: Timestamp.now(),
+    });
 
-  // Handle form submission
-  const handleScheduleInterment = async () => {
-    // Validate form
-    if (!formData.client || !formData.deceased || !formData.lot || !formData.date || !formData.time || !formData.contact) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      // Add to Firebase FIRST
-      const docRef = await addDoc(collection(db, 'interments'), {
-        client: formData.client,
-        deceased: formData.deceased,
-        lot: formData.lot,
-        date: formData.date,
-        time: formData.time,
-        contact: formData.contact,
-        notes: formData.notes,
-        status: formData.status,
-        createdAt: Timestamp.now(),
+    console.log('Successfully added interment with ID:', docRef.id);
+    
+    // Wait a brief moment for Firebase to sync
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Show success message
+    toast.success('Interment scheduled successfully!');
+    
+    // Reset submitting state
+    setSubmitting(false);
+    
+    // Close dialog
+    setDialogOpen(false);
+    
+    // Reset form after a small delay
+    setTimeout(() => {
+      setFormData({
+        client: '',
+        deceased: '',
+        lot: '',
+        date: '',
+        time: '',
+        contact: '',
+        notes: '',
+        status: 'pending',
       });
+    }, 100);
 
-      console.log('Successfully added interment with ID:', docRef.id);
-      
-      // Wait a brief moment for Firebase to sync
-      await new Promise(resolve => setTimeout(resolve, 500));
+  } catch (error: any) {
+    console.error('Error scheduling interment:', error);
+    toast.error('Failed to schedule interment: ' + error.message);
+    setSubmitting(false);
+  }
+};
+ // Handle update interment
+const handleUpdateInterment = async () => {
+  if (!editingInterment) return;
+
+  // Validate form
+  if (!formData.client || !formData.deceased || !formData.lot || !formData.date || !formData.time || !formData.contact) {
+    toast.error('Please fill in all required fields');
+    return;
+  }
+
+  setSubmitting(true);
+
+  try {
+    // Update in Firebase
+    const intermentRef = doc(db, 'interments', editingInterment.id);
+    await updateDoc(intermentRef, {
+      client: formData.client,
+      deceased: formData.deceased,
+      lot: formData.lot,
+      date: formData.date,
+      time: formData.time,
+      contact: formData.contact,
+      notes: formData.notes,
+      status: formData.status,
+      updatedAt: Timestamp.now(),
+    });
+
+    console.log('Successfully updated interment with ID:', editingInterment.id);
+    
+    // Show success message
+    toast.success('Interment updated successfully!');
+    
+    // Reset states
+    setSubmitting(false);
+    setDialogOpen(false);
+    setEditingInterment(null);
+    
+    // Reset form after a small delay
+    setTimeout(() => {
+      setFormData({
+        client: '',
+        deceased: '',
+        lot: '',
+        date: '',
+        time: '',
+        contact: '',
+        notes: '',
+        status: 'pending',
+      });
+    }, 100);
+
+  } catch (error: any) {
+    console.error('Error updating interment:', error);
+    toast.error('Failed to update interment: ' + error.message);
+    setSubmitting(false);
+  }
+};
+// Handle delete interment
+  const handleDeleteInterment = async () => {
+    if (!intermentToDelete) return;
+    setDeleting(true);
+    try {
+      // Delete from Firebase
+      await deleteDoc(doc(db, 'interments', intermentToDelete.id));
+      console.log('Successfully deleted interment with ID:', intermentToDelete.id);
       
       // Show success message
-      toast.success('Interment scheduled successfully!');
+      toast.success('Interment deleted successfully!');
       
-      // Reset submitting state
-      setSubmitting(false);
-      
-      // Close dialog
-      setDialogOpen(false);
-      
-      // Reset form after a small delay
-      setTimeout(() => {
-        setFormData({
-          client: '',
-          deceased: '',
-          lot: '',
-          date: '',
-          time: '',
-          contact: '',
-          notes: '',
-          status: 'pending',
-        });
-      }, 100);
-
+      // Reset states
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setIntermentToDelete(null);
     } catch (error: any) {
-      console.error('Error scheduling interment:', error);
-      toast.error('Failed to schedule interment: ' + error.message);
-      setSubmitting(false);
+      console.error('Error deleting interment:', error);
+      toast.error('Failed to delete interment: ' + error.message);
+      setDeleting(false);
     }
   };
+  // Handle edit button click
+const handleEditClick = (interment: Interment) => {
+  setEditingInterment(interment);
+  setFormData({
+    client: interment.client,
+    deceased: interment.deceased,
+    lot: interment.lot,
+    date: interment.date,
+    time: interment.time,
+    contact: interment.contact,
+    notes: interment.notes || '',
+    status: interment.status,
+  });
+  setDialogOpen(true);
+};
 
   // Helper function to get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -217,26 +316,14 @@ export function IntermentScheduling() {
     return date > today;
   };
 
-  // Filter interments based on search and active tab
-  const getFilteredInterments = () => {
-    let filtered = interments.filter(interment =>
-      interment.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      interment.deceased.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      interment.lot.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    switch (activeTab) {
-      case 'upcoming':
-        return filtered.filter(i => isFutureDate(i.date) && i.status !== 'completed');
-      case 'today':
-        return filtered.filter(i => isToday(i.date));
-      case 'completed':
-        return filtered.filter(i => i.status === 'completed');
-      case 'all':
-      default:
-        return filtered;
-    }
-  };
+ // Filter interments based on search only
+const getFilteredInterments = () => {
+  return interments.filter(interment =>
+    interment.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    interment.deceased.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    interment.lot.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+};
 
   const filteredInterments = getFilteredInterments();
 
@@ -269,25 +356,25 @@ export function IntermentScheduling() {
   const isFormValid = formData.client && formData.deceased && formData.lot && formData.date && formData.time && formData.contact;
 
   // Handle dialog close with form reset
-  const handleDialogClose = (open: boolean) => {
-    setDialogOpen(open);
-    if (!open && !submitting) {
-      // Reset form when manually closing dialog
-      setTimeout(() => {
-        setFormData({
-          client: '',
-          deceased: '',
-          lot: '',
-          date: '',
-          time: '',
-          contact: '',
-          notes: '',
-          status: 'pending',
-        });
-      }, 200);
-    }
-  };
-
+ const handleDialogClose = (open: boolean) => {
+  setDialogOpen(open);
+  if (!open && !submitting) {
+    // Reset form and editing state when manually closing dialog
+    setTimeout(() => {
+      setFormData({
+        client: '',
+        deceased: '',
+        lot: '',
+        date: '',
+        time: '',
+        contact: '',
+        notes: '',
+        status: 'pending',
+      });
+      setEditingInterment(null);
+    }, 200);
+  }
+};
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -315,8 +402,12 @@ export function IntermentScheduling() {
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Schedule New Interment</DialogTitle>
-              <DialogDescription>Schedule a new burial service</DialogDescription>
+            <DialogTitle>
+  {editingInterment ? 'Edit Interment' : 'Schedule New Interment'}
+</DialogTitle>
+<DialogDescription>
+  {editingInterment ? 'Update burial service details' : 'Schedule a new burial service'}
+</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -417,20 +508,20 @@ export function IntermentScheduling() {
                 >
                   Cancel
                 </Button>
-                <Button 
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={handleScheduleInterment}
-                  disabled={!isFormValid || submitting}
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Scheduling...
-                    </>
-                  ) : (
-                    'Schedule'
-                  )}
-                </Button>
+               <Button 
+  className="bg-blue-600 hover:bg-blue-700"
+  onClick={editingInterment ? handleUpdateInterment : handleScheduleInterment}
+  disabled={!isFormValid || submitting}
+>
+  {submitting ? (
+    <>
+      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+      {editingInterment ? 'Updating...' : 'Scheduling...'}
+    </>
+  ) : (
+    editingInterment ? 'Update' : 'Schedule'
+  )}
+</Button>
               </div>
             </div>
           </DialogContent>
@@ -470,58 +561,68 @@ export function IntermentScheduling() {
                       className="pl-10"
                     />
                   </div>
-                  
-                  {/* Filter Tabs */}
-                  <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="grid w-full grid-cols-4">
-                      <TabsTrigger value="all">All</TabsTrigger>
-                      <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-                      <TabsTrigger value="today">Today</TabsTrigger>
-                      <TabsTrigger value="completed">Completed</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
+      </div>
 
                 <div className="space-y-3 max-h-[500px] overflow-y-auto">
                   {filteredInterments.length > 0 ? (
                     filteredInterments.map((interment) => (
                       <Card key={interment.id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h3 className="font-semibold">{interment.deceased}</h3>
-                              <p className="text-sm text-muted-foreground">Client: {interment.client}</p>
-                            </div>
-                            <Badge className={getStatusColor(interment.status)}>
-                              {interment.status.charAt(0).toUpperCase() + interment.status.slice(1)}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                            <div className="flex items-center space-x-1">
-                              <Calendar className="h-4 w-4" />
-                              <span>{interment.date}</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <Clock className="h-4 w-4" />
-                              <span>{interment.time}</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <MapPin className="h-4 w-4" />
-                              <span>{interment.lot}</span>
-                            </div>
-                          </div>
-                          {interment.notes && (
-                            <p className="text-sm text-muted-foreground mt-2 italic">{interment.notes}</p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-1">Contact: {interment.contact}</p>
-                        </CardContent>
+                      <CardContent className="p-4">
+  <div className="flex justify-between items-start mb-2">
+    <div className="flex-1">
+      <h3 className="font-semibold">{interment.deceased}</h3>
+      <p className="text-sm text-muted-foreground">Client: {interment.client}</p>
+    </div>
+    <div className="flex items-center gap-2">
+      <Badge className={getStatusColor(interment.status)}>
+        {interment.status.charAt(0).toUpperCase() + interment.status.slice(1)}
+      </Badge>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => handleEditClick(interment)}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+        onClick={() => {
+          setIntermentToDelete(interment);
+          setDeleteDialogOpen(true);
+        }}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  </div>
+  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+    <div className="flex items-center space-x-1">
+      <Calendar className="h-4 w-4" />
+      <span>{interment.date}</span>
+    </div>
+    <div className="flex items-center space-x-1">
+      <Clock className="h-4 w-4" />
+      <span>{interment.time}</span>
+    </div>
+    <div className="flex items-center space-x-1">
+      <MapPin className="h-4 w-4" />
+      <span>{interment.lot}</span>
+    </div>
+  </div>
+  {interment.notes && (
+    <p className="text-sm text-muted-foreground mt-2 italic">{interment.notes}</p>
+  )}
+  <p className="text-xs text-muted-foreground mt-1">Contact: {interment.contact}</p>
+</CardContent>
                       </Card>
                     ))
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
                       <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>No {activeTab !== 'all' ? activeTab : ''} interments found</p>
-                    </div>
+<p>No interments found</p>                    </div>
                   )}
                 </div>
               </TabsContent>
@@ -597,6 +698,37 @@ export function IntermentScheduling() {
           </div>
         </CardContent>
       </Card>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the interment for{' '}
+              <strong>{intermentToDelete?.deceased}</strong>.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteInterment}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+ 

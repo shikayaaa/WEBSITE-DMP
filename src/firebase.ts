@@ -1,11 +1,11 @@
-// src/lib/firebase.ts
+// src/firebase.ts
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 
-// Your Firebase configuration
+// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAtSkLMC5eWa5WUjzWyu56RWuPeeBlD9gg",
   authDomain: "dmpdb-8f26e.firebaseapp.com",
@@ -30,5 +30,44 @@ if (typeof window !== 'undefined') {
   analytics = getAnalytics(app);
 }
 export { analytics };
+
+// Enable auth persistence (keeps user logged in)
+setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.error("Error setting auth persistence:", error);
+});
+
+// Enable offline persistence for Firestore (optional but recommended)
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code === 'failed-precondition') {
+    console.warn('Firestore persistence failed: Multiple tabs open');
+  } else if (err.code === 'unimplemented') {
+    console.warn('Firestore persistence not supported by browser');
+  }
+});
+
+// Helper function to check if user is authenticated
+export const isAuthenticated = () => {
+  return auth.currentUser !== null;
+};
+
+// Helper function to get current user
+export const getCurrentUser = () => {
+  return auth.currentUser;
+};
+
+// Helper function to check user role (staff or admin)
+export const getUserRole = async () => {
+  const user = auth.currentUser;
+  if (!user) return null;
+  
+  try {
+    const userDocRef = doc(db, 'users', user.uid);
+    const userDoc = await getDoc(userDocRef);
+    return userDoc.exists() ? userDoc.data()?.role : null;
+  } catch (error) {
+    console.error('Error getting user role:', error);
+    return null;
+  }
+};
 
 export default app;

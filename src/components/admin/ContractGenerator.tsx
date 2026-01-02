@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Download, FileText, Calendar, DollarSign, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Download, FileText, Calendar, Save, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -8,14 +8,35 @@ import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
+import { toast } from 'sonner';
+import { collection, addDoc, updateDoc, doc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { db } from '../../firebase';
+
+interface Contact {
+  id: string;
+  userId?: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  type: 'client' | 'lead' | 'beneficiary';
+  status: 'active' | 'inactive';
+  relatedLots?: string[];
+  relatedContracts?: string[];
+  joinedDate: string;
+  notes?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
 
 interface ContractGeneratorProps {
   isOpen: boolean;
   onClose: () => void;
   installmentPlans: any[];
+  preselectedContact?: Contact | null;
 }
 
-export function ContractGenerator({ isOpen, onClose, installmentPlans }: ContractGeneratorProps) {
+export function ContractGenerator({ isOpen, onClose, installmentPlans, preselectedContact }: ContractGeneratorProps) {
   const [selectedLotType, setSelectedLotType] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('');
   const [clientName, setClientName] = useState('');
@@ -23,6 +44,34 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
   const [clientPhone, setClientPhone] = useState('');
   const [lotNumber, setLotNumber] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedContractId, setSavedContractId] = useState<string | null>(null);
+
+  // Pre-fill form when contact is preselected
+  useEffect(() => {
+    if (preselectedContact) {
+      setClientName(preselectedContact.name);
+      setClientEmail(preselectedContact.email);
+      setClientPhone(preselectedContact.phone);
+      if (preselectedContact.relatedLots && preselectedContact.relatedLots.length > 0) {
+        setLotNumber(preselectedContact.relatedLots[0]);
+      }
+    }
+  }, [preselectedContact]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedLotType('');
+      setSelectedTerm('');
+      setClientName('');
+      setClientEmail('');
+      setClientPhone('');
+      setLotNumber('');
+      setShowPreview(false);
+      setSavedContractId(null);
+    }
+  }, [isOpen]);
 
   const selectedPlan = installmentPlans.find(plan => plan.lotType === selectedLotType);
   
@@ -46,11 +95,13 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
     
     // Down payment
     schedule.push({
-      id: 0,
+      paymentNumber: 0,
       type: 'Down Payment',
       amount: selectedPlan.downPayment,
       dueDate: startDate.toISOString().split('T')[0],
-      status: 'pending'
+      status: 'pending',
+      paidDate: null,
+      paidAmount: 0
     });
     
     // Monthly payments
@@ -59,11 +110,13 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
       dueDate.setMonth(dueDate.getMonth() + i);
       
       schedule.push({
-        id: i,
+        paymentNumber: i,
         type: `Monthly Payment ${i}`,
         amount: monthlyAmount,
         dueDate: dueDate.toISOString().split('T')[0],
-        status: 'pending'
+        status: 'pending',
+        paidDate: null,
+        paidAmount: 0
       });
     }
     
@@ -76,15 +129,98 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
 
   const handleGenerateContract = () => {
     if (!selectedLotType || !selectedTerm || !clientName || !clientEmail || !lotNumber) {
-      alert('Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
     setShowPreview(true);
   };
 
+  const handleSaveContract = async () => {
+    if (!selectedLotType || !selectedTerm || !clientName || !clientEmail || !lotNumber) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const contractId = `CON-${Date.now().toString().slice(-6)}`;
+      const paymentSchedule = generatePaymentSchedule();
+      
+      const contractData = {
+        contractId: contractId,
+        contactId: preselectedContact?.id || null,
+        userId: preselectedContact?.userId || null,
+        
+        // Client Information
+        clientName: clientName,
+        clientEmail: clientEmail,
+        clientPhone: clientPhone,
+        
+        // Lot Information
+        lotNumber: lotNumber,
+        lotType: selectedLotType,
+        
+        // Payment Information
+        paymentTerms: parseInt(selectedTerm),
+        totalPrice: selectedPlan?.totalPrice || 0,
+        downPayment: selectedPlan?.downPayment || 0,
+        monthlyPayment: getMonthlyAmount(),
+        
+        // Payment Schedule
+        paymentSchedule: paymentSchedule,
+        
+        // Status & Tracking
+        status: 'active', // active, completed, cancelled, suspended
+        paymentStatus: 'pending', // pending, partial, paid
+        totalPaid: 0,
+        remainingBalance: selectedPlan?.totalPrice || 0,
+        nextPaymentDue: paymentSchedule[0]?.dueDate || null,
+        
+        // Metadata
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        createdBy: preselectedContact?.userId || 'staff',
+        notes: `Contract generated for ${clientName}`
+      };
+
+      // Save contract to Firestore
+      const contractRef = await addDoc(collection(db, 'contracts'), contractData);
+      
+      // Update contact's relatedContracts array if contact exists
+      if (preselectedContact?.id) {
+        await updateDoc(doc(db, 'contacts', preselectedContact.id), {
+          relatedContracts: arrayUnion(contractRef.id),
+          updatedAt: Timestamp.now()
+        });
+      }
+
+      // Update lot status to 'reserved' or 'sold'
+      // You can implement this if you have a lots collection
+      
+      setSavedContractId(contractRef.id);
+      toast.success('Contract saved successfully!');
+      
+    } catch (error) {
+      console.error('Error saving contract:', error);
+      toast.error('Failed to save contract. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDownloadPDF = () => {
     // In a real application, this would generate and download a PDF
-    alert('Contract PDF downloaded successfully!');
+    // You could use libraries like jsPDF or pdfmake
+    toast.success('PDF generation feature coming soon!');
+  };
+
+  const handleCloseAfterSave = () => {
+    if (savedContractId) {
+      toast.success('Contract created successfully!', {
+        description: `Contract ID: ${contractData.contractId}`
+      });
+    }
+    onClose();
   };
 
   const contractData = {
@@ -102,12 +238,22 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={savedContractId ? handleCloseAfterSave : onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Contract Generator
+            {preselectedContact && (
+              <Badge variant="outline" className="ml-2">
+                For: {preselectedContact.name}
+              </Badge>
+            )}
+            {savedContractId && (
+              <Badge className="ml-2 bg-green-100 text-green-800">
+                Saved
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -127,6 +273,7 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
                       placeholder="Enter client full name"
+                      disabled={!!preselectedContact}
                     />
                   </div>
                   <div>
@@ -137,6 +284,7 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
                       value={clientEmail}
                       onChange={(e) => setClientEmail(e.target.value)}
                       placeholder="Enter email address"
+                      disabled={!!preselectedContact}
                     />
                   </div>
                   <div>
@@ -146,6 +294,7 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
                       placeholder="Enter phone number"
+                      disabled={!!preselectedContact}
                     />
                   </div>
                   <div>
@@ -156,6 +305,11 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
                       onChange={(e) => setLotNumber(e.target.value)}
                       placeholder="e.g., A-001"
                     />
+                    {preselectedContact?.relatedLots && preselectedContact.relatedLots.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Available lots: {preselectedContact.relatedLots.join(', ')}
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -228,8 +382,11 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
               <Button variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={handleGenerateContract} disabled={!selectedLotType || !selectedTerm || !clientName || !clientEmail || !lotNumber}>
-                Generate Contract
+              <Button 
+                onClick={handleGenerateContract} 
+                disabled={!selectedLotType || !selectedTerm || !clientName || !clientEmail || !lotNumber}
+              >
+                Preview Contract
               </Button>
             </div>
           </div>
@@ -239,15 +396,54 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">Contract Preview</h3>
               <div className="flex gap-2">
-                <Button onClick={handleDownloadPDF} className="flex items-center gap-2">
+                {!savedContractId && (
+                  <Button 
+                    onClick={handleSaveContract} 
+                    disabled={isSaving}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save Contract
+                      </>
+                    )}
+                  </Button>
+                )}
+                <Button 
+                  onClick={handleDownloadPDF} 
+                  className="flex items-center gap-2"
+                  disabled={!savedContractId}
+                >
                   <Download className="h-4 w-4" />
                   Download PDF
                 </Button>
-                <Button variant="outline" onClick={() => setShowPreview(false)}>
-                  Edit
-                </Button>
+                {!savedContractId && (
+                  <Button variant="outline" onClick={() => setShowPreview(false)}>
+                    Edit
+                  </Button>
+                )}
               </div>
             </div>
+
+            {savedContractId && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                    <Save className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-green-900">Contract saved successfully!</p>
+                    <p className="text-sm text-green-700">Contract ID: {contractData.contractId}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Card>
               <CardHeader className="text-center">
@@ -315,7 +511,7 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
                   <div className="max-h-60 overflow-y-auto">
                     <div className="space-y-2">
                       {contractData.schedule.map((payment) => (
-                        <div key={payment.id} className="flex items-center justify-between p-2 bg-muted/10 rounded">
+                        <div key={payment.paymentNumber} className="flex items-center justify-between p-2 bg-muted/10 rounded">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm">{payment.type}</span>
@@ -336,11 +532,13 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans }: Contrac
             </Card>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowPreview(false)}>
-                Back to Edit
-              </Button>
-              <Button onClick={onClose}>
-                Close
+              {!savedContractId && (
+                <Button variant="outline" onClick={() => setShowPreview(false)}>
+                  Back to Edit
+                </Button>
+              )}
+              <Button onClick={handleCloseAfterSave}>
+                {savedContractId ? 'Done' : 'Close'}
               </Button>
             </div>
           </div>
