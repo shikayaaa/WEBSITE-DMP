@@ -30,6 +30,8 @@ interface Contact {
     relatedContracts?: string[]; // ADD THIS
   joinedDate: string;
   notes?: string;
+   message?: string; // ADD THIS LINE
+  isRead?: boolean; // ADD THIS LINE (to track if message was read)
   createdAt?: any;
   updatedAt?: any;
 }
@@ -86,6 +88,8 @@ const [selectedContactForContract, setSelectedContactForContract] = useState<Con
           relatedLots: data.relatedLots || [],
           joinedDate: data.joinedDate || data.createdAt?.toDate().toISOString() || new Date().toISOString(),
           notes: data.notes || '',
+            message: data.message || '', // ADD THIS
+    isRead: data.isRead || false, // ADD THIS
           createdAt: data.createdAt,
           updatedAt: data.updatedAt
         } as Contact;
@@ -644,6 +648,32 @@ const [selectedContactForContract, setSelectedContactForContract] = useState<Con
                   </div>
                 </>
               )}
+              {/* Client Message Section */}
+{selectedContact.message && (
+  <>
+    <Separator />
+    <div className="space-y-3">
+      <h4 className="font-semibold text-sm text-muted-foreground uppercase flex items-center gap-2">
+        <Mail className="h-4 w-4" />
+        Client Message
+      </h4>
+      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+        <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedContact.message}</p>
+        {selectedContact.createdAt && (
+          <p className="text-xs text-muted-foreground mt-2">
+            Sent on {new Date(selectedContact.createdAt.toDate()).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </p>
+        )}
+      </div>
+    </div>
+  </>
+)}
             </div>
           )}
         <DialogFooter className="flex gap-2">
