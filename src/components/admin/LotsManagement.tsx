@@ -135,16 +135,16 @@ useEffect(() => {
     }
 
     try {
-      const lotData = {
-        id: newLot.lotNumber,
-        section: newLot.section,
-        status: newLot.status,
-        price: parseFloat(newLot.price),
-        size: newLot.size,
-        location: newLot.location,
-        client: newLot.ownerName || null,
-        createdAt: new Date().toISOString()
-      };
+ const lotData = {
+  id: newLot.lotNumber,
+  section: newLot.section,
+  status: newLot.status,
+  price: parseFloat(newLot.price),
+  size: newLot.size,
+  location: newLot.location,
+  client: (newLot.ownerName && newLot.ownerName !== 'none') ? newLot.ownerName : null,
+  createdAt: new Date().toISOString()
+};
 
       await addDoc(collection(db, 'lots'), lotData);
       
@@ -430,17 +430,21 @@ useEffect(() => {
           <h2 className="text-2xl font-bold">Lots Management</h2>
           <p className="text-muted-foreground">Manage burial lots and their status</p>
         </div>
-        <Button 
-          className="bg-primary hover:bg-primary/90 text-white"
-          onClick={() => setAddLotOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add New Lot
-        </Button>
+    <Button 
+  className="bg-primary hover:bg-primary/90 text-white relative z-50 cursor-pointer"
+  onClick={() => {
+    console.log('Button clicked!');
+    setAddLotOpen(true);
+  }}
+  type="button"
+>
+  <Plus className="h-4 w-4 mr-2" />
+  Add New Lot
+</Button>
       </div>
 
-      <Dialog open={addLotOpen} onOpenChange={setAddLotOpen}>
-        <DialogContent className="sm:max-w-[550px]">
+<Dialog open={addLotOpen} onOpenChange={setAddLotOpen}>
+      <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
             <DialogTitle>Add New Lot</DialogTitle>
             <DialogDescription>
@@ -527,7 +531,7 @@ useEffect(() => {
               </Select>
             </div>
 
-   <div className="space-y-2">
+<div className="space-y-2">
   <Label htmlFor="ownerName">Owner (Optional)</Label>
   <Select
     value={newLot.ownerName}
@@ -537,7 +541,7 @@ useEffect(() => {
       <SelectValue placeholder="Select contact or leave empty" />
     </SelectTrigger>
     <SelectContent>
-      <SelectItem value="">No Owner</SelectItem>
+      <SelectItem value="none">No Owner</SelectItem>  {/* ✅ CHANGED "" to "none" */}
       {contacts.map((contact) => (
         <SelectItem key={contact.id} value={contact.name}>
           {contact.name} - {contact.email}
