@@ -63,7 +63,7 @@ const [deleting, setDeleting] = useState(false);
     status: 'pending',
   });
 
-  useEffect(() => {
+useEffect(() => {
     // Set up real-time listener only
     const unsubscribe = setupIntermentListener();
     return () => unsubscribe();
@@ -72,28 +72,38 @@ const [deleting, setDeleting] = useState(false);
   // Real-time listener for interments
   const setupIntermentListener = () => {
     const intermentQuery = query(
-      collection(db, 'interments'),
-      orderBy('date', 'asc')
+      collection(db, 'interment_requests'),
+      orderBy('preferredDate', 'asc')
     );
     
-   return onSnapshot(intermentQuery, (snapshot) => {
+    return onSnapshot(intermentQuery, (snapshot) => {
   const intermentsList: Interment[] = [];
-  snapshot.forEach((doc) => {
-    const data = doc.data();
-    intermentsList.push({
-      id: doc.id,
-      userId: data.userId || '',  // ADD THIS LINE
-      client: data.client || '',
-          deceased: data.deceased || '',
-          date: data.date || '',
-          time: data.time || '',
-          lot: data.lot || '',
-          status: data.status || 'pending',
-          contact: data.contact || '',
-          notes: data.notes || '',
-          createdAt: data.createdAt,
-        });
-      });
+snapshot.forEach((doc) => {
+  const data = doc.data();
+  
+  // Parse date from MM/DD/YYYY to YYYY-MM-DD
+  let formattedDate = data.preferredDate || '';
+  if (data.preferredDate && typeof data.preferredDate === 'string') {
+    const dateParts = data.preferredDate.split('/');
+    if (dateParts.length === 3) {
+      formattedDate = `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
+    }
+  }
+  
+  intermentsList.push({
+    id: doc.id,
+    userId: data.userId || '',
+    client: data.contactPersonName || data.clientName || '',
+    deceased: data.deceasedName || '',
+    date: formattedDate,
+    time: data.preferredTime || '',
+    lot: `Section ${data.section || 'N/A'} - Block ${data.block || 'N/A'}, Lot ${data.lotNumber || 'N/A'}`,
+    status: (data.status?.toLowerCase() || 'pending'),
+    contact: data.phoneNumber || data.contactNumber || '',
+    notes: data.additionalNotes || data.notes || '',
+    createdAt: data.submittedAt || data.createdAt,
+  });
+});
       setInterments(intermentsList);
       setLoading(false);
     }, (error) => {
@@ -102,41 +112,6 @@ const [deleting, setDeleting] = useState(false);
     });
   };
 
-  // Load all interments from Firebase
-  const loadInterments = async () => {
-    try {
-      setLoading(true);
-      const intermentQuery = query(
-        collection(db, 'interments'),
-        orderBy('date', 'asc')
-      );
-      const intermentSnapshot = await getDocs(intermentQuery);
-      const intermentsList: Interment[] = [];
-
-      intermentSnapshot.forEach((doc) => {
-        const data = doc.data();
-     intermentsList.push({
-  id: doc.id,
-  userId: data.userId || '',  // ADD THIS LINE
-  client: data.client || '',
-          deceased: data.deceased || '',
-          date: data.date || '',
-          time: data.time || '',
-          lot: data.lot || '',
-          status: data.status || 'pending',
-          contact: data.contact || '',
-          notes: data.notes || '',
-          createdAt: data.createdAt,
-        });
-      });
-      setInterments(intermentsList);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading interments:', error);
-      toast.error('Failed to load interments');
-      setLoading(false);
-    }
-  };
 // Handle form submission
 const handleScheduleInterment = async () => {
   // Validate form
@@ -146,19 +121,30 @@ const handleScheduleInterment = async () => {
   }
   setSubmitting(true);
   try {
-    // Add to Firebase FIRST
- const docRef = await addDoc(collection(db, 'interments'), {
-  userId: auth.currentUser?.uid,  // ADD THIS LINE
-  client: formData.client,
-  deceased: formData.deceased,
-      lot: formData.lot,
-      date: formData.date,
-      time: formData.time,
-      contact: formData.contact,
-      notes: formData.notes,
-      status: formData.status,
-      createdAt: Timestamp.now(),
-    });
+// Convert date from YYYY-MM-DD to MM/DD/YYYY
+const dateParts = formData.date.split('-');
+const formattedDate = `${dateParts[1]}/${dateParts[2]}/${dateParts[0]}`;
+
+// Parse lot information
+const lotParts = formData.lot.match(/Section (.+) - Block (.+), Lot (.+)/);
+const section = lotParts ? lotParts[1] : 'N/A';
+const block = lotParts ? lotParts[2] : 'N/A';
+const lotNumber = lotParts ? lotParts[3] : 'N/A';
+
+const docRef = await addDoc(collection(db, 'interment_requests'), {
+  userId: auth.currentUser?.uid,
+  contactPersonName: formData.client,
+  deceasedName: formData.deceased,
+  section: section,
+  block: block,
+  lotNumber: lotNumber,
+  preferredDate: formattedDate,
+  preferredTime: formData.time,
+  phoneNumber: formData.contact,
+  additionalNotes: formData.notes,
+  status: formData.status.charAt(0).toUpperCase() + formData.status.slice(1),
+  submittedAt: Timestamp.now(),
+});
 
     console.log('Successfully added interment with ID:', docRef.id);
     
@@ -194,7 +180,7 @@ const handleScheduleInterment = async () => {
     setSubmitting(false);
   }
 };
- // Handle update interment
+// Handle update interment
 const handleUpdateInterment = async () => {
   if (!editingInterment) return;
 
@@ -207,20 +193,30 @@ const handleUpdateInterment = async () => {
   setSubmitting(true);
 
   try {
-    // Update in Firebase
-    const intermentRef = doc(db, 'interments', editingInterment.id);
+    // Convert date from YYYY-MM-DD to MM/DD/YYYY
+    const dateParts = formData.date.split('-');
+    const formattedDate = `${dateParts[1]}/${dateParts[2]}/${dateParts[0]}`;
+
+    // Parse lot information
+    const lotParts = formData.lot.match(/Section (.+) - Block (.+), Lot (.+)/);
+    const section = lotParts ? lotParts[1] : formData.lot;
+    const block = lotParts ? lotParts[2] : 'N/A';
+    const lotNumber = lotParts ? lotParts[3] : 'N/A';
+
+    const intermentRef = doc(db, 'interment_requests', editingInterment.id);
     await updateDoc(intermentRef, {
-      client: formData.client,
-      deceased: formData.deceased,
-      lot: formData.lot,
-      date: formData.date,
-      time: formData.time,
-      contact: formData.contact,
-      notes: formData.notes,
-      status: formData.status,
+      contactPersonName: formData.client,
+      deceasedName: formData.deceased,
+      section: section,
+      block: block,
+      lotNumber: lotNumber,
+      preferredDate: formattedDate,
+      preferredTime: formData.time,
+      phoneNumber: formData.contact,
+      additionalNotes: formData.notes,
+      status: formData.status.charAt(0).toUpperCase() + formData.status.slice(1),
       updatedAt: Timestamp.now(),
     });
-
     console.log('Successfully updated interment with ID:', editingInterment.id);
     
     // Show success message
@@ -257,7 +253,7 @@ const handleUpdateInterment = async () => {
     setDeleting(true);
     try {
       // Delete from Firebase
-      await deleteDoc(doc(db, 'interments', intermentToDelete.id));
+await deleteDoc(doc(db, 'interment_requests', intermentToDelete.id));
       console.log('Successfully deleted interment with ID:', intermentToDelete.id);
       
       // Show success message

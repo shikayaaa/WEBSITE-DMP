@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Eye, DollarSign, ChevronLeft, ChevronRight, Plus, History, User, MapPin, Calendar, Download, Loader2 } from 'lucide-react';
-import { Button } from '../ui/button';
+import { Search, Eye, DollarSign, ChevronLeft, ChevronRight, Plus, History, User, MapPin, Calendar, Download, Loader2, Trash2 } from 'lucide-react';import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -11,9 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { toast } from 'sonner';
-import { collection, getDocs, getDoc, doc, query, orderBy, updateDoc, Timestamp, setDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, orderBy, updateDoc, Timestamp, setDoc, deleteDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase';
-
 interface Payment {
   id: string;
   client: string;
@@ -182,11 +180,75 @@ const loadPayments = async () => {
         const paymentData = paymentSummaryDoc.data();
         console.log(`💵 Payment data for ${userId}:`, paymentData);
         
+        // Get the actual agreement to ensure we have correct amounts
+        const agreementQuery = query(
+          collection(db, 'preNeedAgreements'),
+          where('userId', '==', userId)
+        );
+        const agreementSnap = await getDocs(agreementQuery);
+        if (!agreementSnap.empty) {
+  console.log('🔍 Agreement fields available:', Object.keys(agreementSnap.docs[0].data()));
+  console.log('💰 Agreement amounts:', {
+    totalCost: agreementSnap.docs[0].data().totalCost,
+    totalAmount: agreementSnap.docs[0].data().totalAmount,
+    totalPrice: agreementSnap.docs[0].data().totalPrice,
+    initialPayment: agreementSnap.docs[0].data().initialPayment,
+    downPayment: agreementSnap.docs[0].data().downPayment,
+  });
+}
+        let lotNumber = paymentData.lotNumber || 'N/A';
+        let totalAmount = paymentData.totalAmount || 0;
+        let totalPaid = paymentData.totalPaid || 0;
+        let contractId = paymentData.contractId || 'N/A';
+        
+       // If agreement exists, get the actual data from there
+if (!agreementSnap.empty) {
+  const agreementData = agreementSnap.docs[0].data();
+  
+  console.log('📊 Full agreement data:', agreementData);
+  
+  lotNumber = agreementData.lotCategory || agreementData.lotNumber || agreementData.lot || agreementData.location || lotNumber;
+  
+  // ✅ Try multiple field names for total amount
+  totalAmount = agreementData.totalCost || 
+                agreementData.totalAmount || 
+                agreementData.total || 
+                parseFloat(agreementData.totalPrice?.replace(/[₱,\s]/g, '') || '0') || 
+                totalAmount;
+  
+  // ✅ Try multiple field names for down payment  
+  const downPaymentAmount = agreementData.initialPayment || 
+                            agreementData.downPayment || 
+                            parseFloat(agreementData.downPaymentString?.replace(/[₱,\s]/g, '') || '0') || 
+                            0;
+  
+  // IMPORTANT: If totalPaid is 0, use the down payment
+  if (totalPaid === 0 && downPaymentAmount > 0) {
+    totalPaid = downPaymentAmount;
+            
+            // Update the payment summary with the correct amount
+            try {
+              await updateDoc(doc(db, 'users', userId, 'payments', 'summary'), {
+                totalPaid: totalPaid,
+                remainingBalance: totalAmount - totalPaid,
+                updatedAt: Timestamp.now(),
+              });
+              console.log(`✅ Updated payment summary for ${userId} with initial payment: ₱${totalPaid}`);
+            } catch (updateError) {
+              console.error(`❌ Error updating payment summary:`, updateError);
+            }
+          }
+          
+          contractId = agreementData.contractId || contractId;
+        }
+        
+        const remainingBalance = totalAmount - totalPaid;
+        
         // Determine status
         let status = 'pending';
-        if (paymentData.remainingBalance === 0) {
+        if (remainingBalance === 0) {
           status = 'paid';
-        } else if (paymentData.totalPaid > 0) {
+        } else if (totalPaid > 0) {
           status = 'partial';
         }
         
@@ -194,7 +256,7 @@ const loadPayments = async () => {
         if (paymentData.nextDueDate) {
           const dueDate = new Date(paymentData.nextDueDate);
           const now = new Date();
-          if (dueDate < now && paymentData.remainingBalance > 0) {
+          if (dueDate < now && remainingBalance > 0) {
             status = 'overdue';
           }
         }
@@ -207,13 +269,13 @@ const loadPayments = async () => {
           id: paymentId,
           client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
           clientId: userId,
-          lot: paymentData.lotNumber || 'N/A',
-          amount: paymentData.totalAmount || 0,
-          paid: paymentData.totalPaid || 0,
-          due: paymentData.remainingBalance || 0,
+          lot: lotNumber,
+          amount: totalAmount,
+          paid: totalPaid,
+          due: remainingBalance > 0 ? remainingBalance : 0,
           dueDate: paymentData.nextDueDate || 'N/A',
           status,
-          contractId: paymentData.contractId || 'N/A',
+          contractId: contractId,
         });
       }
     }
@@ -221,12 +283,13 @@ const loadPayments = async () => {
     // Sort by payment ID to maintain order
     paymentsListPromises.sort((a, b) => a.id.localeCompare(b.id));
     
+    console.log('✅ Final payments list:', paymentsListPromises);
     setPayments(paymentsListPromises);
   } catch (error) {
     console.error('Error loading payments:', error);
   }
 };
-  // Load contracts from pre-need agreements
+
 // Load contracts from pre-need agreements
 const loadContracts = async () => {
   try {
@@ -239,86 +302,121 @@ const loadContracts = async () => {
     const contractsList: Contract[] = [];
     let contractCounter = 1;
     
-    for (const contractDoc of contractsSnapshot.docs) {
-      const data = contractDoc.data();
-      
-      // Get user data
-      const userDoc = await getDoc(doc(db, 'users', data.userId));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-      
-      const totalAmount = data.totalCost || 0;
-      const downPayment = data.initialPayment || 0;
-      const amountPaid = data.amountPaid || downPayment;
-      const remainingBalance = totalAmount - amountPaid;
-      
-      // Generate sequential contract ID
-      const contractId = data.contractId || `CON-${String(contractCounter).padStart(3, '0')}`;
-      contractCounter++;
-      
-    contractsList.push({
-  id: contractId,
-  client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
-  clientId: data.userId,
-  lot: data.lotNumber || 'N/A',
-  date: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A',
-  status: remainingBalance === 0 ? 'completed' : 'active',
-  type: data.planType || 'burial',
-  email: userData.email || 'N/A',
-  phone: userData.phoneNumber || 'N/A',
-  address: userData.address || 'N/A',
-  lotSize: data.lotSize || '2m x 1m',
-  lotLocation: data.lotLocation || `Section ${data.section || 'A'}`,
-  totalAmount,
-  downPayment,
-  monthlyPayment: data.monthlyPayment || 0,
-  paymentTerm: data.paymentTerm || '12 months',
-  amountPaid,
-  remainingBalance,
-  nextPaymentDate: data.nextPaymentDate || 'N/A',
-  expiryDate: data.expiryDate || 'N/A',
-  terms: data.terms || 'Standard contract terms and conditions apply.',
-});
-
-// 🔗 CREATE/UPDATE PAYMENT SUMMARY TO LINK WITH CONTRACT
-try {
-  const paymentSummaryRef = doc(db, 'users', data.userId, 'payments', 'summary');
-  const paymentSummarySnap = await getDoc(paymentSummaryRef);
+   for (const contractDoc of contractsSnapshot.docs) {
+  const data = contractDoc.data();
   
-  if (!paymentSummarySnap.exists()) {
-    // Create payment summary if it doesn't exist
-    await setDoc(paymentSummaryRef, {
-      contractId: contractId,
-      paymentId: `PAY-${String(contractCounter).padStart(3, '0')}`,
-      lotNumber: data.lotNumber || 'N/A',
-      totalAmount: totalAmount,
-      totalPaid: amountPaid,
-      remainingBalance: remainingBalance,
-      nextDueDate: data.nextPaymentDate || new Date().toISOString().split('T')[0],
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-    console.log(`✅ Created payment summary for ${contractId}`);
-  } else {
-    // Update existing payment summary with contract ID
-    await updateDoc(paymentSummaryRef, {
-      contractId: contractId,
-      updatedAt: Timestamp.now(),
-    });
-    console.log(`✅ Updated payment summary with ${contractId}`);
-  }
-} catch (error) {
-  console.error(`❌ Error linking payment to contract ${contractId}:`, error);
-}
+  console.log('📄 Contract data:', {
+    docId: contractDoc.id,
+    totalCost: data.totalCost,
+    initialPayment: data.initialPayment,
+    downPayment: data.downPayment,
+    allFields: Object.keys(data)
+  });
+  
+  // Get user data
+  const userDoc = await getDoc(doc(db, 'users', data.userId));
+  const userData = userDoc.exists() ? userDoc.data() : {};
+  
+  // Try multiple field names for total amount and down payment
+  const totalAmount = data.totalCost || data.totalAmount || data.total || 0;
+  const downPayment = data.initialPayment || data.downPayment || data.initial || 0;
+  
+  console.log('💰 Calculated amounts:', {
+    totalAmount,
+    downPayment,
+    userId: data.userId
+  });
+      
+      // Get actual amount paid from payment summary
+      let actualAmountPaid = downPayment; // Default to down payment
+      const paymentSummaryDoc = await getDoc(
+        doc(db, 'users', data.userId, 'payments', 'summary')
+      );
+      if (paymentSummaryDoc.exists()) {
+        const paymentData = paymentSummaryDoc.data();
+        actualAmountPaid = paymentData.totalPaid || downPayment;
       }
       
-  // Sort by contract ID to maintain order
-      contractsList.sort((a, b) => a.id.localeCompare(b.id));
+      const remainingBalance = totalAmount - actualAmountPaid;
+      // Generate sequential contract ID
+const contractId = data.contractId || `CON-${String(contractCounter).padStart(6, '0')}`;
+contractCounter++;
       
-      setContracts(contractsList);
-    } catch (error) {
-      console.error('Error loading contracts:', error);
+      contractsList.push({
+        id: contractId,
+        client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
+        clientId: data.userId,
+        lot: data.lotNumber || data.lot || data.location || data.lotType || 'N/A',
+        date: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A',
+        status: remainingBalance === 0 ? 'completed' : 'active',
+        type: data.planType || 'burial',
+        email: userData.email || 'N/A',
+        phone: userData.phoneNumber || 'N/A',
+        address: userData.address || 'N/A',
+        lotSize: data.lotSize || '2m x 1m',
+        lotLocation: data.lotLocation || `Section ${data.section || 'A'}`,
+        totalAmount,
+        downPayment,
+        monthlyPayment: data.monthlyPayment || 0,
+        paymentTerm: data.paymentTerm || '12 months',
+        amountPaid: actualAmountPaid,
+        remainingBalance,
+        nextPaymentDate: data.nextPaymentDate || 'N/A',
+        expiryDate: data.expiryDate || 'N/A',
+        terms: data.terms || 'Standard contract terms and conditions apply.',
+      });
+
+      // 🔗 CREATE/UPDATE PAYMENT SUMMARY TO SYNC WITH CONTRACT
+      try {
+        const paymentSummaryRef = doc(db, 'users', data.userId, 'payments', 'summary');
+        const paymentSummarySnap = await getDoc(paymentSummaryRef);
+        
+        if (!paymentSummarySnap.exists()) {
+          // Create payment summary if it doesn't exist
+          await setDoc(paymentSummaryRef, {
+            contractId: contractId,
+            paymentId: `PAY-${String(contractCounter).padStart(3, '0')}`,
+            lotNumber: data.lotNumber || data.lot || data.location || 'N/A',
+            totalAmount: totalAmount,
+            totalPaid: downPayment, // ✅ Set to down payment initially
+            remainingBalance: remainingBalance,
+            nextDueDate: data.nextPaymentDate || new Date().toISOString().split('T')[0],
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          });
+          console.log(`✅ Created payment summary for ${contractId} with initial payment: ₱${downPayment}`);
+        } else {
+          // Update existing payment summary
+          const currentData = paymentSummarySnap.data();
+          const currentTotalPaid = currentData.totalPaid || 0;
+          
+          // If current total paid is 0, set it to down payment
+          const updatedTotalPaid = currentTotalPaid === 0 ? downPayment : currentTotalPaid;
+          
+          await updateDoc(paymentSummaryRef, {
+            contractId: contractId,
+            lotNumber: data.lotNumber || data.lot || data.location || currentData.lotNumber || 'N/A',
+            totalAmount: totalAmount,
+            totalPaid: updatedTotalPaid,
+            remainingBalance: totalAmount - updatedTotalPaid,
+            updatedAt: Timestamp.now(),
+          });
+          console.log(`✅ Updated payment summary for ${contractId}, totalPaid: ₱${updatedTotalPaid}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error syncing payment summary for contract ${contractId}:`, error);
+      }
     }
-  };
+    
+    // Sort by contract ID to maintain order
+    contractsList.sort((a, b) => a.id.localeCompare(b.id));
+    
+    console.log('✅ Final contracts list:', contractsList);
+    setContracts(contractsList);
+  } catch (error) {
+    console.error('Error loading contracts:', error);
+  }
+};
   const handleUpdateDueDate = async () => {
   if (!selectedPayment || !newDueDate) {
     toast.error('Please select a valid date');
@@ -424,11 +522,55 @@ try {
     setShowContractDetails(true);
   };
 
-  const handleDownloadContract = (contract: Contract) => {
-    toast.success(`Contract ${contract.id} downloaded successfully`, {
-      description: `Downloaded contract for ${contract.client}`
-    });
-  };
+const handleDeleteContract = async (contract: Contract) => {
+  if (!confirm(`Are you sure you want to delete contract ${contract.id} for ${contract.client}?\n\nThis action cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    // Find the actual Firestore document for this contract
+    const agreementsQuery = query(
+      collection(db, 'preNeedAgreements'),
+      orderBy('createdAt', 'desc')
+    );
+    const agreementsSnapshot = await getDocs(agreementsQuery);
+    
+    // Find the document that matches this contract
+    let docToDelete = null;
+    for (const docSnap of agreementsSnapshot.docs) {
+      const data = docSnap.data();
+      if (data.userId === contract.clientId) {
+        docToDelete = docSnap.id;
+        break;
+      }
+    }
+
+    if (docToDelete) {
+      // Delete the contract document from preNeedAgreements
+      await deleteDoc(doc(db, 'preNeedAgreements', docToDelete));
+      
+      // Also delete the payment summary for this user
+      const paymentSummaryRef = doc(db, 'users', contract.clientId, 'payments', 'summary');
+      const paymentSummarySnap = await getDoc(paymentSummaryRef);
+      
+      if (paymentSummarySnap.exists()) {
+        await deleteDoc(paymentSummaryRef);
+      }
+      
+      toast.success(`Contract ${contract.id} deleted successfully`, {
+        description: `Deleted contract for ${contract.client}`
+      });
+      
+      // Reload data
+      await loadData();
+    } else {
+      toast.error('Contract not found in database');
+    }
+  } catch (error) {
+    console.error('Error deleting contract:', error);
+    toast.error('Failed to delete contract');
+  }
+};
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
@@ -664,7 +806,7 @@ const overduePayments = payments.filter(p => p.status === 'overdue').length;
                             {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
                           </Badge>
                         </TableCell>
-                 <TableCell>
+                <TableCell>
   <div className="flex items-center gap-2">
     <Button 
       variant="ghost" 
@@ -674,7 +816,15 @@ const overduePayments = payments.filter(p => p.status === 'overdue').length;
     >
       <Eye className="h-4 w-4" />
     </Button>
-   
+    <Button 
+      variant="ghost" 
+      size="sm"
+      onClick={() => handleDeleteContract(contract)}
+      title="Delete Contract"
+      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
   </div>
 </TableCell>
                       </TableRow>
@@ -1013,10 +1163,7 @@ const overduePayments = payments.filter(p => p.status === 'overdue').length;
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowContractDetails(false)}>Close</Button>
-            <Button onClick={() => selectedContract && handleDownloadContract(selectedContract)}>
-              <Download className="h-4 w-4 mr-2" />
-              Download Contract
-            </Button>
+           
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { toast } from 'sonner';
-import { collection, addDoc, updateDoc, doc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { collection, addDoc, updateDoc, doc, Timestamp, arrayUnion, setDoc, getDocs } from 'firebase/firestore';
 
 interface Contact {
   id: string;
@@ -46,6 +46,8 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
   const [showPreview, setShowPreview] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedContractId, setSavedContractId] = useState<string | null>(null);
+  const [generatedContractId, setGeneratedContractId] = useState<string>('');
+  const [contractData, setContractData] = useState<any>(null);
 
   // Pre-fill form when contact is preselected
   useEffect(() => {
@@ -70,6 +72,8 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
       setLotNumber('');
       setShowPreview(false);
       setSavedContractId(null);
+      setContractData(null);
+      setGeneratedContractId('');
     }
   }, [isOpen]);
 
@@ -132,6 +136,23 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
       toast.error('Please fill in all required fields');
       return;
     }
+    
+    // Generate preview data immediately
+    const paymentSchedule = generatePaymentSchedule();
+    setContractData({
+      contractId: generatedContractId || 'CON-PREVIEW',
+      date: new Date().toLocaleDateString(),
+      client: { name: clientName, email: clientEmail, phone: clientPhone },
+      lot: { type: selectedLotType, number: lotNumber },
+      payment: {
+        total: selectedPlan?.totalPrice || 0,
+        downPayment: selectedPlan?.downPayment || 0,
+        monthly: getMonthlyAmount(),
+        terms: selectedTerm
+      },
+      schedule: paymentSchedule
+    });
+    
     setShowPreview(true);
   };
 
@@ -143,12 +164,32 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
 
     try {
       setIsSaving(true);
-      const contractId = `CON-${Date.now().toString().slice(-6)}`;
-      const paymentSchedule = generatePaymentSchedule();
       
-      const contractData = {
+      // ✅ Generate sequential contract ID
+      const contractsSnapshot = await getDocs(collection(db, 'preNeedAgreements'));
+      const contractCounter = contractsSnapshot.size + 1;
+      const contractId = `CON-${String(contractCounter).padStart(3, '0')}`;
+      setGeneratedContractId(contractId);
+
+      const paymentSchedule = generatePaymentSchedule();
+
+      // Build contract data for display
+      setContractData({
         contractId: contractId,
-        contactId: preselectedContact?.id || null,
+        date: new Date().toLocaleDateString(),
+        client: { name: clientName, email: clientEmail, phone: clientPhone },
+        lot: { type: selectedLotType, number: lotNumber },
+        payment: {
+          total: selectedPlan?.totalPrice || 0,
+          downPayment: selectedPlan?.downPayment || 0,
+          monthly: getMonthlyAmount(),
+          terms: selectedTerm
+        },
+        schedule: paymentSchedule
+      });
+      
+      const firestoreContractData = {
+        contractId: contractId,
         userId: preselectedContact?.userId || null,
         
         // Client Information
@@ -159,10 +200,18 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
         // Lot Information
         lotNumber: lotNumber,
         lotType: selectedLotType,
+        lot: lotNumber,
+        location: lotNumber,
+        lotCategory: selectedLotType,
+        section: 'A',
         
         // Payment Information
+        paymentTerm: `${selectedTerm} months`,
         paymentTerms: parseInt(selectedTerm),
+        totalCost: selectedPlan?.totalPrice || 0,
+        totalAmount: selectedPlan?.totalPrice || 0,
         totalPrice: selectedPlan?.totalPrice || 0,
+        initialPayment: selectedPlan?.downPayment || 0,
         downPayment: selectedPlan?.downPayment || 0,
         monthlyPayment: getMonthlyAmount(),
         
@@ -170,22 +219,37 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
         paymentSchedule: paymentSchedule,
         
         // Status & Tracking
-        status: 'active', // active, completed, cancelled, suspended
-        paymentStatus: 'pending', // pending, partial, paid
-        totalPaid: 0,
-        remainingBalance: selectedPlan?.totalPrice || 0,
-        nextPaymentDue: paymentSchedule[0]?.dueDate || null,
+        status: 'active',
+        paymentStatus: 'pending',
+        planType: 'burial',
         
         // Metadata
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
-        createdBy: preselectedContact?.userId || 'staff',
+        nextPaymentDate: paymentSchedule[1]?.dueDate || null,
+        terms: 'Standard contract terms and conditions apply.',
         notes: `Contract generated for ${clientName}`
       };
 
-      // Save contract to Firestore
-      const contractRef = await addDoc(collection(db, 'contracts'), contractData);
+      // Save to preNeedAgreements
+      const contractRef = await addDoc(collection(db, 'preNeedAgreements'), firestoreContractData);
       
+      // Create payment summary
+      if (preselectedContact?.userId) {
+        const paymentSummaryRef = doc(db, 'users', preselectedContact.userId, 'payments', 'summary');
+        await setDoc(paymentSummaryRef, {
+          contractId: contractId,
+          paymentId: `PAY-${String(contractCounter).padStart(3, '0')}`,
+          lotNumber: lotNumber,
+          totalAmount: selectedPlan?.totalPrice || 0,
+          totalPaid: selectedPlan?.downPayment || 0,
+          remainingBalance: (selectedPlan?.totalPrice || 0) - (selectedPlan?.downPayment || 0),
+          nextDueDate: paymentSchedule[1]?.dueDate || null,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      }
+
       // Update contact's relatedContracts array if contact exists
       if (preselectedContact?.id) {
         await updateDoc(doc(db, 'contacts', preselectedContact.id), {
@@ -193,12 +257,11 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
           updatedAt: Timestamp.now()
         });
       }
-
-      // Update lot status to 'reserved' or 'sold'
-      // You can implement this if you have a lots collection
       
       setSavedContractId(contractRef.id);
-      toast.success('Contract saved successfully!');
+      toast.success('Contract saved successfully!', {
+        description: `Contract ID: ${contractId}`
+      });
       
     } catch (error) {
       console.error('Error saving contract:', error);
@@ -215,26 +278,12 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
   };
 
   const handleCloseAfterSave = () => {
-    if (savedContractId) {
+    if (savedContractId && contractData) {
       toast.success('Contract created successfully!', {
         description: `Contract ID: ${contractData.contractId}`
       });
     }
     onClose();
-  };
-
-  const contractData = {
-    contractId: `CON-${Date.now().toString().slice(-6)}`,
-    date: new Date().toLocaleDateString(),
-    client: { name: clientName, email: clientEmail, phone: clientPhone },
-    lot: { type: selectedLotType, number: lotNumber },
-    payment: {
-      total: selectedPlan?.totalPrice || 0,
-      downPayment: selectedPlan?.downPayment || 0,
-      monthly: getMonthlyAmount(),
-      terms: selectedTerm
-    },
-    schedule: generatePaymentSchedule()
   };
 
   return (
@@ -329,11 +378,17 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
                         <SelectValue placeholder="Select lot type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {installmentPlans.map((plan) => (
-                          <SelectItem key={plan.id} value={plan.lotType}>
-                            {plan.lotType}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="Lawn Area - Prime">Lawn Area - Prime</SelectItem>
+                        <SelectItem value="Lawn Area - Special Premium">Lawn Area - Special Premium</SelectItem>
+                        <SelectItem value="Lawn Area - Premium">Lawn Area - Premium</SelectItem>
+                        <SelectItem value="Lawn Area - Regular">Lawn Area - Regular</SelectItem>
+                        <SelectItem value="Memorial Garden - Special Premium">Memorial Garden - Special Premium</SelectItem>
+                        <SelectItem value="Memorial Garden - Premium">Memorial Garden - Premium</SelectItem>
+                        <SelectItem value="Memorial Garden - Regular">Memorial Garden - Regular</SelectItem>
+                        <SelectItem value="Garden Family Estate - Special Premium">Garden Family Estate - Special Premium</SelectItem>
+                        <SelectItem value="Garden Family Estate - Premium">Garden Family Estate - Premium</SelectItem>
+                        <SelectItem value="Family Estate - Premier Family Estate">Family Estate - Premier Family Estate</SelectItem>
+                        <SelectItem value="Family Estate - Prestige Family Estate">Family Estate - Prestige Family Estate</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -415,14 +470,7 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
                     )}
                   </Button>
                 )}
-                <Button 
-                  onClick={handleDownloadPDF} 
-                  className="flex items-center gap-2"
-                  disabled={!savedContractId}
-                >
-                  <Download className="h-4 w-4" />
-                  Download PDF
-                </Button>
+             
                 {!savedContractId && (
                   <Button variant="outline" onClick={() => setShowPreview(false)}>
                     Edit
@@ -431,7 +479,7 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
               </div>
             </div>
 
-            {savedContractId && (
+            {savedContractId && contractData && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
@@ -439,97 +487,99 @@ export function ContractGenerator({ isOpen, onClose, installmentPlans, preselect
                   </div>
                   <div>
                     <p className="font-medium text-green-900">Contract saved successfully!</p>
-                    <p className="text-sm text-green-700">Contract ID: {contractData.contractId}</p>
+                    <p className="text-sm text-green-700">Contract ID: {contractData?.contractId}</p>
                   </div>
                 </div>
               </div>
             )}
 
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle>DUMAGUETE MEMORIAL PARK</CardTitle>
-                <p className="text-muted-foreground">Pre-Need Purchase Contract</p>
-                <div className="flex justify-between items-center mt-4">
-                  <Badge variant="outline">Contract ID: {contractData.contractId}</Badge>
-                  <Badge variant="outline">Date: {contractData.date}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Client Details */}
-                <div>
-                  <h4 className="font-medium mb-2">Client Information</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Name:</span>
-                      <p>{contractData.client.name}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Email:</span>
-                      <p>{contractData.client.email}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Phone:</span>
-                      <p>{contractData.client.phone || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Lot:</span>
-                      <p>{contractData.lot.number} - {contractData.lot.type}</p>
+            {contractData && (
+              <Card>
+                <CardHeader className="text-center">
+                  <CardTitle>DUMAGUETE MEMORIAL PARK</CardTitle>
+                  <p className="text-muted-foreground">Pre-Need Purchase Contract</p>
+                  <div className="flex justify-between items-center mt-4">
+                    <Badge variant="outline">Contract ID: {contractData?.contractId || 'Generating...'}</Badge>
+                    <Badge variant="outline">Date: {contractData?.date || new Date().toLocaleDateString()}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Client Details */}
+                  <div>
+                    <h4 className="font-medium mb-2">Client Information</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Name:</span>
+                        <p>{contractData?.client?.name}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Email:</span>
+                        <p>{contractData?.client?.email}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Phone:</span>
+                        <p>{contractData?.client?.phone || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Lot:</span>
+                        <p>{contractData?.lot?.number} - {contractData?.lot?.type}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <Separator />
+                  <Separator />
 
-                {/* Payment Details */}
-                <div>
-                  <h4 className="font-medium mb-2">Payment Details</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Total Price:</span>
-                      <p className="font-medium">{formatCurrency(contractData.payment.total)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Down Payment:</span>
-                      <p className="font-medium">{formatCurrency(contractData.payment.downPayment)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Monthly Payment:</span>
-                      <p className="font-medium">{formatCurrency(contractData.payment.monthly)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Payment Term:</span>
-                      <p className="font-medium">{contractData.payment.terms} months</p>
+                  {/* Payment Details */}
+                  <div>
+                    <h4 className="font-medium mb-2">Payment Details</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Total Price:</span>
+                        <p className="font-medium">{formatCurrency(contractData?.payment?.total || 0)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Down Payment:</span>
+                        <p className="font-medium">{formatCurrency(contractData?.payment?.downPayment || 0)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Monthly Payment:</span>
+                        <p className="font-medium">{formatCurrency(contractData?.payment?.monthly || 0)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Payment Term:</span>
+                        <p className="font-medium">{contractData?.payment?.terms} months</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <Separator />
+                  <Separator />
 
-                {/* Payment Schedule */}
-                <div>
-                  <h4 className="font-medium mb-2">Payment Schedule</h4>
-                  <div className="max-h-60 overflow-y-auto">
-                    <div className="space-y-2">
-                      {contractData.schedule.map((payment) => (
-                        <div key={payment.paymentNumber} className="flex items-center justify-between p-2 bg-muted/10 rounded">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">{payment.type}</span>
+                  {/* Payment Schedule */}
+                  <div>
+                    <h4 className="font-medium mb-2">Payment Schedule</h4>
+                    <div className="max-h-60 overflow-y-auto">
+                      <div className="space-y-2">
+                        {contractData?.schedule?.map((payment: any) => (
+                          <div key={payment.paymentNumber} className="flex items-center justify-between p-2 bg-muted/10 rounded">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{payment.type}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-muted-foreground">{payment.dueDate}</span>
+                              <span className="font-medium">{formatCurrency(payment.amount)}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {payment.status}
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm text-muted-foreground">{payment.dueDate}</span>
-                            <span className="font-medium">{formatCurrency(payment.amount)}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {payment.status}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="flex justify-end gap-2">
               {!savedContractId && (

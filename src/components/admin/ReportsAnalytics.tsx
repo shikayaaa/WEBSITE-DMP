@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { useAuth } from '../../contexts/AuthContext';
+
 
 interface MonthlyData {
   month: string;
@@ -43,8 +45,20 @@ interface LotTypeRevenue {
   sold: number;
   revenue: number;
 }
-
 export function ReportsAnalytics() {
+const { currentUser, userRole } = useAuth();
+
+  useEffect(() => {
+    console.log('==========================================');
+    console.log('🔍 Current User Email:', currentUser?.email);
+    console.log('🔍 Current User UID:', currentUser?.uid);
+    console.log('🔍 User Role:', userRole);
+    console.log('🔍 Is Staff?', userRole === 'staff');
+    console.log('🔍 Is Admin?', userRole === 'admin');
+    console.log('🔍 Can Access?', userRole === 'staff' || userRole === 'admin');
+    console.log('==========================================');
+  }, [currentUser, userRole]);
+  
   const [installmentFilter, setInstallmentFilter] = useState('all');
   const [lotTypeFilter, setLotTypeFilter] = useState('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
@@ -64,11 +78,22 @@ export function ReportsAnalytics() {
   const [lotsSold, setLotsSold] = useState(0);
   const [activeClients, setActiveClients] = useState(0);
   const [avgMonthlyRevenue, setAvgMonthlyRevenue] = useState(0);
+useEffect(() => {
+    if (!currentUser) {
+      window.location.href = '/login';
+      return;
+    }
+    
+    if (userRole !== 'staff' && userRole !== 'admin') {
+      alert('⛔ Access Denied: This page is only accessible to staff members');
+      window.location.href = '/dashboard';
+      return;
+    }
+  }, [currentUser, userRole]);
 
   useEffect(() => {
     loadAnalyticsData();
   }, [dateRange, installmentFilter, lotTypeFilter, paymentStatusFilter]);
-
   const loadAnalyticsData = async () => {
     try {
       setIsLoading(true);
@@ -247,12 +272,24 @@ export function ReportsAnalytics() {
     const data: IntermentData[] = [];
 
     months.forEach((month, index) => {
-      const monthInterments = interments.filter((interment: any) => {
+const monthInterments = interments.filter((interment: any) => {
         const doc = interment.data();
-        if (!doc.createdAt && !doc.intermentDate) return false;
-        const intermentDate = doc.intermentDate?.toDate ? doc.intermentDate.toDate() : 
+        
+        // Try to parse preferredDate first (format: MM/DD/YYYY)
+        if (doc.preferredDate && typeof doc.preferredDate === 'string') {
+          const dateParts = doc.preferredDate.split('/');
+          if (dateParts.length === 3) {
+            const month = parseInt(dateParts[0]) - 1; // Convert to 0-indexed
+            const yearVal = parseInt(dateParts[2]);
+            return month === index && yearVal === year;
+          }
+        }
+        
+        // Fallback to timestamp fields
+        if (!doc.submittedAt && !doc.createdAt) return false;
+        const intermentDate = doc.submittedAt?.toDate ? doc.submittedAt.toDate() : 
                              doc.createdAt?.toDate ? doc.createdAt.toDate() : 
-                             new Date(doc.intermentDate || doc.createdAt);
+                             new Date(doc.submittedAt || doc.createdAt);
         return intermentDate.getMonth() === index && intermentDate.getFullYear() === year;
       });
 
@@ -325,6 +362,16 @@ export function ReportsAnalytics() {
     if (paymentStatusFilter !== 'all') count++;
     return count;
   };
+if (!currentUser || !userRole) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -336,7 +383,6 @@ export function ReportsAnalytics() {
       </div>
     );
   }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -344,18 +390,20 @@ export function ReportsAnalytics() {
           <h2 className="text-2xl font-bold">Reports & Analytics</h2>
           <p className="text-gray-600">Financial and operational insights for {dateRange}</p>
         </div>
+    
         <div className="flex items-center gap-2">
           <Select value={dateRange} onValueChange={setDateRange}>
             <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="2030">2030</SelectItem>
+              <SelectItem value="2029">2029</SelectItem>
+              <SelectItem value="2028">2028</SelectItem>
+              <SelectItem value="2027">2027</SelectItem>
+              <SelectItem value="2026">2026</SelectItem>
               <SelectItem value="2025">2025</SelectItem>
               <SelectItem value="2024">2024</SelectItem>
-              <SelectItem value="2023">2023</SelectItem>
-              <SelectItem value="2022">2022</SelectItem>
-              <SelectItem value="2021">2021</SelectItem>
-              <SelectItem value="2020">2020</SelectItem>
             </SelectContent>
           </Select>
          

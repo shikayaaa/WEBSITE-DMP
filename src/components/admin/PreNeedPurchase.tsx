@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Eye, Edit, Download, Calendar, DollarSign, Users, Package } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Download, Calendar, DollarSign, Users, Package, FileText, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Input } from '../ui/input';import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -12,6 +11,7 @@ import { Textarea } from '../ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
+
 
 interface PreNeedPlan {
   id: string;
@@ -582,6 +582,59 @@ lotSize: lotSize,
     alert(`❌ Error: ${error.message}`);
   }
 };
+
+const handleGenerateDeed = async (plan: PreNeedPlan) => {
+  if (!confirm(`Generate Deed of Sale for ${plan.client}?\n\nThis will create an official deed document.`)) {
+    return;
+  }
+
+  try {
+    const currentYear = new Date().getFullYear();
+    
+    // Get all deeds for this year to generate next ID
+    const deedsSnapshot = await getDocs(collection(db, 'deedOfSales'));
+    const currentYearDeeds: any[] = [];
+    
+    deedsSnapshot.forEach((doc) => {
+      const deedId = doc.data().deedId || '';
+      if (deedId.startsWith(`DOS-${currentYear}`)) {
+        currentYearDeeds.push(doc.data());
+      }
+    });
+    
+    const nextNumber = currentYearDeeds.length + 1;
+    const deedId = `DOS-${currentYear}-${String(nextNumber).padStart(3, '0')}`;
+    
+    // Get current date
+    const today = new Date().toISOString().split('T')[0];
+
+    // Create the deed
+    const newDeed = {
+      deedId: deedId,
+      contractId: plan.contractId,
+      clientName: plan.client,
+      lotNumber: plan.lotSize,
+      block: plan.planType,
+      saleDate: today,
+amount: `₱${plan.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,      status: 'pending',
+      notarizedBy: '',
+      registrationNumber: '',
+      titleNumber: '',
+      notes: `Generated from Pre-Need Contract ${plan.contractId}\nPayment completed on ${today}`,
+      template: 'DEED OF SALE AND CERTIFICATE OF PERPETUAL CARE',
+      preNeedContractId: plan.id,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+
+    await addDoc(collection(db, 'deedOfSales'), newDeed);
+
+    alert(`✅ Success: Deed of Sale ${deedId} generated successfully!\n\nYou can now find it in the Deed of Sale section.`);
+  } catch (error: any) {
+    console.error('Error generating deed:', error);
+    alert(`❌ Error: ${error.message}`);
+  }
+};
   const filteredPlans = preNeedPlans.filter(plan => {
     const matchesSearch = plan.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          plan.planType.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -911,7 +964,7 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
                               <p className="text-sm text-gray-500">{plan.lotSize}</p>
                             </div>
                           </TableCell>
-                          <TableCell>₱{plan.totalAmount.toLocaleString()}</TableCell>
+                  <TableCell>₱{plan.totalAmount.toLocaleString()}</TableCell>
                           <TableCell>
                             <div className="space-y-1 min-w-[120px]">
                               <div className="flex justify-between text-sm">
@@ -925,19 +978,19 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
                                 ></div>
                               </div>
                             </div>
-                        </TableCell>
-<TableCell className="font-medium">₱{plan.remainingBalance.toLocaleString()}</TableCell>
+                          </TableCell>
+                          <TableCell>₱{plan.remainingBalance.toLocaleString()}</TableCell>
                           <TableCell>
                             <Badge className={getStatusColor(plan.status)}>
                               {plan.status.charAt(0).toUpperCase() + plan.status.slice(1)}
                             </Badge>
                           </TableCell>
-                         <TableCell>
-                           <div className="flex items-center gap-2">
+ <TableCell>
+  <div className="flex items-center gap-2">
     <Button 
       variant="ghost" 
       size="sm"
-    onClick={() => handleViewPlan(plan)}
+      onClick={() => handleViewPlan(plan)}
       className="h-8 w-8 p-0"
       title="View Details"
     >
@@ -952,6 +1005,26 @@ const overdueContracts = preNeedPlans.filter(p => p.status === 'overdue').length
     >
       <Edit className="h-4 w-4" />
     </Button>
+    <Button 
+      variant="ghost" 
+      size="sm"
+      onClick={() => handleDeletePlan(plan.id)}
+      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+      title="Delete Plan"
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
+    {plan.status === 'completed' && plan.remainingBalance === 0 && (
+      <Button 
+        variant="ghost" 
+        size="sm"
+        onClick={() => handleGenerateDeed(plan)}
+        className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
+        title="Generate Deed of Sale"
+      >
+        <FileText className="h-4 w-4" />
+      </Button>
+    )}
   </div>
 </TableCell>
                         </TableRow>

@@ -10,13 +10,14 @@ import {
   limit,
   where,
   Timestamp,
-  addDoc
+  addDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 // Settings interface
 export interface Settings {
-  general: {
+  general?: {
     parkName: string;
     contactEmail: string;
     phone: string;
@@ -25,43 +26,43 @@ export interface Settings {
     officeHours: string;
     serviceHours: string;
   };
-  notifications: {
-    email: {
+  notifications?: {
+    email?: {
       paymentReminders: boolean;
       intermentConfirmations: boolean;
       newClientRegistration: boolean;
     };
-    system: {
+    system?: {
       dailyReports: boolean;
       systemMaintenance: boolean;
       lowInventory: boolean;
     };
     reminderDays: number;
   };
-  security: {
-    passwordPolicy: {
+  security?: {
+    passwordPolicy?: {
       minLength: number;
       expiryDays: number;
       requireSpecialChars: boolean;
       requireNumbers: boolean;
       require2FA: boolean;
     };
-    session: {
+    session?: {
       timeoutMinutes: number;
       maxLoginAttempts: number;
     };
   };
-  system: {
-    database: {
+  system?: {
+    database?: {
       automaticBackups: boolean;
       dataRetention: boolean;
       backupTime: string;
     };
-    maintenance: {
+    maintenance?: {
       maintenanceMode: boolean;
       debugMode: boolean;
     };
-    info: {
+    info?: {
       version: string;
       lastUpdated: string;
       databaseSize: string;
@@ -76,11 +77,51 @@ export interface Settings {
 export interface ActivityLog {
   id?: string;
   user: string;
-  userId: string;
+  userId?: string;
   action: string;
   details: string;
   timestamp: Timestamp;
   type: 'payment' | 'contract' | 'interment' | 'client' | 'lot' | 'user' | 'system';
+}
+
+// Company Settings interface
+export interface CompanySettings {
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyWebsite: string;
+  businessLicense: string;
+  currency: string;
+  acceptCash: boolean;
+  acceptBankTransfer: boolean;
+  acceptCheck: boolean;
+  acceptCreditCard: boolean;
+  paypalEnabled: boolean;
+  gcashEnabled: boolean;
+  mayaEnabled: boolean;
+  updatedAt: Date;
+  updatedBy: string;
+}
+
+// Staff Settings interface
+export interface StaffSettings {
+  dateFormat: string;
+  timeFormat: string;
+  timezone: string;
+  language: string;
+  emailNotifications: boolean;
+  paymentReminders: boolean;
+  overdueAlerts: boolean;
+  systemUpdates: boolean;
+  marketingEmails: boolean;
+  twoFactorAuth: boolean;
+  sessionTimeout: string;
+  passwordExpiry: string;
+  theme: string;
+  sidebarCollapsed: boolean;
+  showQuickActions: boolean;
+  updatedAt: Date;
 }
 
 // Firestore collections
@@ -102,7 +143,7 @@ export const fetchSettings = async (): Promise<Settings | null> => {
     return getDefaultSettings();
   } catch (error) {
     console.error('Error fetching settings:', error);
-    throw error;
+    return getDefaultSettings();
   }
 };
 
@@ -151,7 +192,7 @@ export const logActivity = async (activity: Omit<ActivityLog, 'id'>): Promise<vo
     await addDoc(logsRef, activity);
   } catch (error) {
     console.error('Error logging activity:', error);
-    throw error;
+    // Don't throw - logging failures shouldn't break the app
   }
 };
 
@@ -192,7 +233,7 @@ export const fetchActivityLogs = async (
     })) as ActivityLog[];
   } catch (error) {
     console.error('Error fetching activity logs:', error);
-    throw error;
+    return [];
   }
 };
 
@@ -278,6 +319,71 @@ const getDefaultSettings = (): Settings => {
       }
     }
   };
+};
+
+// Company Settings Functions
+export const getCompanySettings = async (): Promise<CompanySettings | null> => {
+  try {
+    const docRef = doc(db, 'company_settings', 'config');
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data() as CompanySettings;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching company settings:', error);
+    throw error;
+  }
+};
+
+export const saveCompanySettings = async (
+  settings: Partial<CompanySettings>,
+  userId: string
+): Promise<void> => {
+  try {
+    const docRef = doc(db, 'company_settings', 'config');
+    await setDoc(docRef, {
+      ...settings,
+      updatedAt: new Date(),
+      updatedBy: userId
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error saving company settings:', error);
+    throw error;
+  }
+};
+
+// Staff Settings Functions
+export const getStaffSettings = async (userId: string): Promise<StaffSettings | null> => {
+  try {
+    const docRef = doc(db, 'staff_settings', userId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data() as StaffSettings;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching staff settings:', error);
+    throw error;
+  }
+};
+
+export const saveStaffSettings = async (
+  userId: string,
+  settings: Partial<StaffSettings>
+): Promise<void> => {
+  try {
+    const docRef = doc(db, 'staff_settings', userId);
+    await setDoc(docRef, {
+      ...settings,
+      updatedAt: new Date()
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error saving staff settings:', error);
+    throw error;
+  }
 };
 
 export { getDefaultSettings };

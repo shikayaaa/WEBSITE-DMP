@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, TrendingUp, DollarSign, ArrowUp } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { collection, query, getDocs, where, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { collection, query, getDocs, where, orderBy, limit, Timestamp, addDoc } from 'firebase/firestore';import { db } from '../../firebase';
 
 export function AdminDashboardOverview() {
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState({
+const [dashboardData, setDashboardData] = useState({
     totalLots: 1569,
     occupiedLots: 0,
     availableLots: 1569,
@@ -17,6 +16,7 @@ export function AdminDashboardOverview() {
     totalRevenue: 0,
     monthlyRevenue: 0,
     revenueGrowth: 0,
+    totalVisitors: 0,
   });
   const [recentActivities, setRecentActivities] = useState([]);
   const [upcomingInterments, setUpcomingInterments] = useState([]);
@@ -38,128 +38,121 @@ export function AdminDashboardOverview() {
         loadChartData(),
       ]);
 
-      setLoading(false);
+    setLoading(false);
     } catch (error) {
       console.error('Error loading dashboard:', error);
       setLoading(false);
     }
   };
-
-  const loadStatistics = async () => {
+// Helper to log visitor activity
+  const logVisitorActivity = async (userId, activityType) => {
     try {
-      // Get all active agreements
-      const agreementsQuery = query(
-        collection(db, 'preNeedAgreements'),
-        where('status', '==', 'active')
-      );
-      const agreementsSnapshot = await getDocs(agreementsQuery);
-
-      // Get all completed payments
-    const paymentsQuery = query(
-  collection(db, 'payments'),
-  limit(20)
+      await addDoc(collection(db, 'visitor_logs'), {
+        userId: userId,
+        activityType: activityType, // 'page_view', 'plan_view', 'inquiry'
+        timestamp: Timestamp.now(),
+        date: new Date().toISOString().split('T')[0]
+      });
+    } catch (error) {
+      console.error('Error logging visitor:', error);
+    }
+  };
+  const loadStatistics = async () => {
+  try {
+    // Get all agreements and filter in memory to avoid index issues
+    const agreementsSnapshot = await getDocs(collection(db, 'preNeedAgreements'));
+const activeAgreements = agreementsSnapshot.docs.filter(doc => 
+  doc.data().status === 'active'
 );
-const paymentsSnapshot = await getDocs(paymentsQuery);
+ // Get all payments and filter/sort in memory
+const paymentsSnapshot = await getDocs(collection(db, 'payments'));
+const completedPayments = paymentsSnapshot.docs.filter(doc => 
+  doc.data().status === 'completed'
+);
+// Calculate total revenue from completed payments only
+let totalRevenue = 0;
+let pendingCount = 0;
+let pendingAmount = 0;
 
-// Sort in memory after fetching
-const sortedPayments = paymentsSnapshot.docs
-  .filter(doc => doc.data().status === 'completed')
-  .sort((a, b) => {
-    const timeA = a.data().paidAt?.toMillis?.() || 0;
-    const timeB = b.data().paidAt?.toMillis?.() || 0;
-    return timeB - timeA;
-  })
-  .slice(0, 5);
-
-      // Calculate total revenue
-      let totalRevenue = 0;
-      let pendingCount = 0;
-      let pendingAmount = 0;
-
-      paymentsSnapshot.forEach(doc => {
-        const amount = doc.data().amount || 0;
-        totalRevenue += amount;
-      });
-
-      // Calculate pending payments from agreements
-      agreementsSnapshot.forEach(doc => {
-        const data = doc.data();
-        const remaining = parseCurrency(data.remainingBalance || '₱0');
-        const nextAmount = parseCurrency(data.nextPaymentAmount || '₱0');
-        
-        if (remaining > 0 && nextAmount > 0) {
-          pendingCount++;
-          pendingAmount += nextAmount;
-        }
-      });
-
+completedPayments.forEach(doc => {
+  const amount = doc.data().amount || 0;
+  totalRevenue += amount;
+});
+ // Calculate pending payments from active agreements
+activeAgreements.forEach(doc => {
+  const data = doc.data();
+  const remaining = Number(data.remainingBalance) || 0;
+  const monthlyPayment = Number(data.monthlyPayment) || 0;
+  
+  if (remaining > 0 && monthlyPayment > 0) {
+    pendingCount++;
+    pendingAmount += monthlyPayment;
+  }
+});
       // Get current month revenue
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      
-      const monthlyPaymentsQuery = query(
-        collection(db, 'payments'),
-        where('paidAt', '>=', Timestamp.fromDate(startOfMonth)),
-        where('status', '==', 'completed')
-      );
-      const monthlySnapshot = await getDocs(monthlyPaymentsQuery);
-      
-      let monthlyRevenue = 0;
-      monthlySnapshot.forEach(doc => {
-        monthlyRevenue += doc.data().amount || 0;
-      });
+     // Calculate monthly revenue by filtering in memory
+let monthlyRevenue = 0;
+completedPayments.forEach(doc => {
+  const paidAt = doc.data().paidAt?.toDate();
+  if (paidAt && paidAt >= startOfMonth) {
+    monthlyRevenue += doc.data().amount || 0;
+  }
+});
+// Get last month dates
+const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-      // Get last month revenue for growth calculation
-      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-      
-      const lastMonthQuery = query(
-        collection(db, 'payments'),
-        where('paidAt', '>=', Timestamp.fromDate(startOfLastMonth)),
-        where('paidAt', '<=', Timestamp.fromDate(endOfLastMonth)),
-        where('status', '==', 'completed')
-      );
-      const lastMonthSnapshot = await getDocs(lastMonthQuery);
-      
-      let lastMonthRevenue = 0;
-      lastMonthSnapshot.forEach(doc => {
-        lastMonthRevenue += doc.data().amount || 0;
-      });
-
-      // Calculate growth percentage
-      const revenueGrowth = lastMonthRevenue > 0 
-        ? Math.round(((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
-        : 0;
-
+    // Calculate last month revenue by filtering in memory
+let lastMonthRevenue = 0;
+completedPayments.forEach(doc => {
+  const paidAt = doc.data().paidAt?.toDate();
+  if (paidAt && paidAt >= startOfLastMonth && paidAt <= endOfLastMonth) {
+    lastMonthRevenue += doc.data().amount || 0;
+  }
+});
+    const revenueGrowth = lastMonthRevenue > 0 
+  ? Math.round(((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
+  : monthlyRevenue > 0 ? 100 : 0;
       // Get interment requests for occupied lots
-      const intermentQuery = query(collection(db, 'interment_requests'));
-      const intermentSnapshot = await getDocs(intermentQuery);
-      
-      let occupiedLots = 0;
-      intermentSnapshot.forEach(doc => {
-        const status = doc.data().status?.toLowerCase();
-        if (status === 'approved' || status === 'completed') {
-          occupiedLots++;
-        }
-      });
+// Calculate occupied lots from completed agreements
+const completedAgreements = agreementsSnapshot.docs.filter(doc => 
+  doc.data().status === 'completed' || doc.data().remainingBalance === 0
+);
 
-      const totalRequests = intermentSnapshot.size;
-      const salesFunnel = totalRequests > 0 
-        ? Math.round((occupiedLots / totalRequests) * 100)
-        : 0;
+const occupiedLots = completedAgreements.length;
 
-      setDashboardData({
-        totalLots: 1247,
-        occupiedLots,
-        availableLots: 1247 - occupiedLots,
-        salesFunnel,
+// Calculate sales funnel: (completed / total agreements) * 100
+const totalAgreements = agreementsSnapshot.size;
+const salesFunnel = totalAgreements > 0 
+  ? Math.round((occupiedLots / totalAgreements) * 100)
+  : 0;
+
+// Calculate total visitors from visitor_logs
+let totalVisitors = 0;
+try {
+  const visitorLogsSnapshot = await getDocs(collection(db, 'visitor_logs'));
+  totalVisitors = visitorLogsSnapshot.size;
+} catch (error) {
+  console.log('No visitor logs yet:', error);
+  // Estimate visitors if no logs exist
+  totalVisitors = totalAgreements * 3;
+}
+
+setDashboardData({  
+        totalLots: 1596,
+        occupiedLots: occupiedLots,
+        availableLots: 1596 - occupiedLots,
+        salesFunnel: salesFunnel,
         pendingPayments: pendingCount,
         pendingPaymentsAmount: pendingAmount,
-        totalRevenue,
-        monthlyRevenue,
-        revenueGrowth,
+        totalRevenue: totalRevenue,
+        monthlyRevenue: monthlyRevenue,
+        revenueGrowth: revenueGrowth,
+        totalVisitors: totalVisitors,
       });
-    } catch (error) {
+         } catch (error) {
       console.error('Error loading statistics:', error);
     }
   };
@@ -224,7 +217,7 @@ const sortedPayments = paymentsSnapshot.docs
           action: 'New plan purchased',
           client: data.fullName || data.userEmail || 'Unknown',
           amount: data.totalPrice || '₱0',
-        time: formatTimestamp(data.paidAt),  // ← FIXED
+  time: formatTimestamp(data.createdAt),
           type: 'agreement',
           color: 'bg-blue-500',
           timestamp: data.createdAt,
@@ -291,12 +284,38 @@ const sortedPayments = paymentsSnapshot.docs
     }
   };
 
-  const loadChartData = async () => {
+const loadChartData = async () => {
     try {
-      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN'];
+      const now = new Date();
+      
+      // Generate last 6 months dynamically
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        months.push(monthNames[monthDate.getMonth()]);
+      }
+      
       const salesVolume = [];
       const visitorsData = [];
-      const now = new Date();
+
+
+// Get all completed payments once
+const paymentsSnapshot = await getDocs(collection(db, 'payments'));
+const completedPayments = paymentsSnapshot.docs.filter(doc => 
+  doc.data().status === 'completed'
+);
+
+// Get all agreements once
+const agreementsSnapshot = await getDocs(collection(db, 'preNeedAgreements'));
+
+// Get all visitor logs once
+let visitorLogsSnapshot = null;
+try {
+  visitorLogsSnapshot = await getDocs(collection(db, 'visitor_logs'));
+} catch (error) {
+  console.log('No visitor logs available:', error);
+}
 
       for (let i = 0; i < 6; i++) {
         const monthDate = new Date(now);
@@ -305,33 +324,53 @@ const sortedPayments = paymentsSnapshot.docs
         const startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
         const endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
 
-        // Get payments for this month
-        const monthPaymentsQuery = query(
-          collection(db, 'payments'),
-          where('paidAt', '>=', Timestamp.fromDate(startDate)),
-          where('paidAt', '<=', Timestamp.fromDate(endDate)),
-          where('status', '==', 'completed')
-        );
-        
-        const snapshot = await getDocs(monthPaymentsQuery);
-        
-        let monthlyRevenue = 0;
-        snapshot.forEach(doc => {
-          monthlyRevenue += doc.data().amount || 0;
-        });
+    // Calculate revenue by filtering completed payments in memory
+let monthlyRevenue = 0;
+completedPayments.forEach(doc => {
+  const paidAt = doc.data().paidAt?.toDate();
+  if (paidAt && paidAt >= startDate && paidAt <= endDate) {
+    monthlyRevenue += doc.data().amount || 0;
+  }
+});
 
         salesVolume.push({
           month: months[i],
           sales: monthlyRevenue / 1000, // Convert to thousands
         });
 
-        // Mock visitor data (you can replace this with real data from your analytics)
-        visitorsData.push({
-          month: months[i],
-          visitors: Math.floor(120 + (i * 15) + Math.random() * 20),
-          buyers: Math.floor(45 + (i * 5) + Math.random() * 10),
-          returns: Math.floor(32 + (i * 3) + Math.random() * 5),
-        });
+// Calculate buyers from agreements created this month
+let monthlyBuyers = 0;
+agreementsSnapshot.docs.forEach(doc => {
+  const createdAt = doc.data().createdAt?.toDate();
+  if (createdAt && createdAt >= startDate && createdAt <= endDate) {
+    monthlyBuyers++;
+  }
+});
+
+// Get real visitor logs for this month
+let monthlyVisitors = 0;
+if (visitorLogsSnapshot) {
+  visitorLogsSnapshot.docs.forEach(doc => {
+    const logDate = doc.data().timestamp?.toDate();
+    if (logDate && logDate >= startDate && logDate <= endDate) {
+      monthlyVisitors++;
+    }
+  });
+}
+
+// If no visitor logs exist yet, estimate from buyers
+if (monthlyVisitors === 0 && monthlyBuyers > 0) {
+  monthlyVisitors = monthlyBuyers * 3; // Estimate 3x visitors per buyer
+}
+
+const returns = Math.floor(monthlyBuyers * 0.3);
+
+visitorsData.push({
+  month: months[i],
+  visitors: monthlyVisitors,
+  buyers: monthlyBuyers,
+  returns: returns,
+});
       }
 
       setSalesVolumeData(salesVolume);
@@ -388,10 +427,10 @@ const sortedPayments = paymentsSnapshot.docs
     }
   };
 
-  const conversionData = [
-    { name: 'Buyers', value: dashboardData.salesFunnel, color: '#0D6F73' },
-    { name: 'New', value: Math.round((100 - dashboardData.salesFunnel) * 0.4), color: '#FF8C42' },
-    { name: 'Other', value: 100 - dashboardData.salesFunnel - Math.round((100 - dashboardData.salesFunnel) * 0.4), color: '#00B8F4' },
+const conversionData = [
+    { name: 'Buyers', value: dashboardData.occupiedLots || 1, color: '#0D6F73' },
+    { name: 'Visitors', value: dashboardData.totalVisitors || 1, color: '#FF8C42' },
+    { name: 'Pending', value: dashboardData.pendingPayments || 1, color: '#00B8F4' },
   ];
 
   if (loading) {
@@ -560,19 +599,20 @@ const sortedPayments = paymentsSnapshot.docs
           </CardContent>
         </Card>
 
-        {/* Conversion Chart */}
+    {/* Conversion Chart */}
         <Card className="card-3d border-0 bg-gradient-to-br from-white to-gray-50/30">
           <CardContent className="p-6">
             <h2 className="text-xl heading text-primary mb-6">Conversion</h2>
-            <div className="flex items-center justify-center" style={{ height: '280px' }}>
-              <ResponsiveContainer width={240} height={240}>
+            <div className="flex flex-col items-center justify-center" style={{ height: '280px' }}>
+              {/* Pie Chart */}
+              <ResponsiveContainer width={240} height={180}>
                 <PieChart>
                   <Pie
                     data={conversionData}
                     cx={120}
-                    cy={120}
-                    innerRadius={70}
-                    outerRadius={100}
+                    cy={90}
+                    innerRadius={50}
+                    outerRadius={80}
                     paddingAngle={3}
                     dataKey="value"
                   >
@@ -582,6 +622,39 @@ const sortedPayments = paymentsSnapshot.docs
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
+
+           {/* Center Percentage Display */}
+{/* Center Percentage Display */}
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">                <div className="flex flex-col items-center justify-center">
+                  <p className="text-xs text-muted-foreground mb-1">Buyers</p>
+                  <p className="text-4xl font-bold text-primary">
+                    {(() => {
+                      const total = conversionData.reduce((sum, item) => sum + item.value, 0);
+                      const buyersPercent = total > 0 ? Math.round((conversionData[0].value / total) * 100) : 0;
+                      return `${buyersPercent}%`;
+                    })()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 mt-4">
+                {conversionData.map((entry, index) => {
+                  const total = conversionData.reduce((sum, item) => sum + item.value, 0);
+                  const percent = total > 0 ? Math.round((entry.value / total) * 100) : 0;
+                  return (
+                    <div key={index} className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded-full" 
+                        style={{ backgroundColor: entry.color }}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {entry.name} {percent}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </CardContent>
         </Card>

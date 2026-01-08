@@ -1,15 +1,1 @@
-// src/hooks/useAuth.ts
-import { useContext } from 'react';
-import { AuthContext } from '../App';
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  
-  if (!context) {
-    throw new Error('useAuth must be used within AuthContext');
-  }
-  
-  return context;
-}
-
-export default useAuth;
+export { useAuth } from '../contexts/AuthContext';

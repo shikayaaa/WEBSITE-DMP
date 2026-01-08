@@ -1,139 +1,40 @@
 import React, { useState } from 'react';
-import { Search, Eye, FileText, Calendar, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Search, Eye, FileText, Calendar, CheckCircle, Clock, AlertCircle, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { toast } from 'sonner';
+
+// Import Firebase hooks
+import { useDeedOfSales, useStaffDeedStats } from '../../hooks/useFirestore';
+import { useAuth } from '../../hooks/useAuth';
 
 export function StaffDeedOfSales() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-
-  const deedOfSales = [
-    {
-      id: 'DOS-001',
-      deedNumber: 'DMD-2024-001',
-      client: 'Maria Santos',
-      lot: 'A-002',
-      lotSize: '2x3m',
-      purchasePrice: 45000,
-      saleDate: '2024-10-15',
-      transferDate: '2024-10-20',
-      status: 'completed',
-      witness1: 'John Admin',
-      witness2: 'Lisa Lopez',
-      notarizedBy: 'Atty. Carlos Mendoza',
-      registrationNumber: 'REG-2024-045',
-      titleNumber: 'TCT-001-2024',
-      assistedBy: 'Jean',
-      clientContact: '+63 912 345 6789',
-      clientEmail: 'maria.santos@email.com'
-    },
-    {
-      id: 'DOS-002',
-      deedNumber: 'DMD-2024-002',
-      client: 'Pedro Garcia',
-      lot: 'B-002',
-      lotSize: '3x3m',
-      purchasePrice: 55000,
-      saleDate: '2024-11-01',
-      transferDate: null,
-      status: 'pending-notarization',
-      witness1: 'John Admin',
-      witness2: 'Jean',
-      notarizedBy: null,
-      registrationNumber: null,
-      titleNumber: null,
-      assistedBy: 'Lisa Lopez',
-      clientContact: '+63 923 456 7890',
-      clientEmail: 'pedro.garcia@email.com'
-    },
-    {
-      id: 'DOS-003',
-      deedNumber: 'DMD-2024-003',
-      client: 'Ana Lopez',
-      lot: 'B-003',
-      lotSize: '3x3m',
-      purchasePrice: 55000,
-      saleDate: '2024-10-05',
-      transferDate: '2024-10-12',
-      status: 'completed',
-      witness1: 'John Admin',
-      witness2: 'Lisa Lopez',
-      notarizedBy: 'Atty. Rosa Villanueva',
-      registrationNumber: 'REG-2024-038',
-      titleNumber: 'TCT-002-2024',
-      assistedBy: 'Jean',
-      clientContact: '+63 934 567 8901',
-      clientEmail: 'ana.lopez@email.com'
-    },
-    {
-      id: 'DOS-004',
-      deedNumber: 'DMD-2024-004',
-      client: 'Carlos Rivera',
-      lot: 'C-005',
-      lotSize: '2x2m',
-      purchasePrice: 35000,
-      saleDate: '2024-09-10',
-      transferDate: null,
-      status: 'pending-documents',
-      witness1: 'John Admin',
-      witness2: 'Jean',
-      notarizedBy: null,
-      registrationNumber: null,
-      titleNumber: null,
-      assistedBy: 'Jean',
-      clientContact: '+63 945 678 9012',
-      clientEmail: 'carlos.rivera@email.com'
-    },
-    {
-      id: 'DOS-005',
-      deedNumber: 'DMD-2024-005',
-      client: 'Rosa Garcia',
-      lot: 'D-002',
-      lotSize: '3x4m',
-      purchasePrice: 65000,
-      saleDate: '2024-11-10',
-      transferDate: '2024-11-15',
-      status: 'completed',
-      witness1: 'John Admin',
-      witness2: 'Lisa Lopez',
-      notarizedBy: 'Atty. Miguel Torres',
-      registrationNumber: 'REG-2024-052',
-      titleNumber: 'TCT-003-2024',
-      assistedBy: 'Lisa Lopez',
-      clientContact: '+63 956 789 0123',
-      clientEmail: 'rosa.garcia@email.com'
-    },
-    {
-      id: 'DOS-006',
-      deedNumber: 'DMD-2024-006',
-      client: 'Juan Dela Cruz',
-      lot: 'A-003',
-      lotSize: '2x3m',
-      purchasePrice: 45000,
-      saleDate: '2024-11-28',
-      transferDate: null,
-      status: 'draft',
-      witness1: null,
-      witness2: null,
-      notarizedBy: null,
-      registrationNumber: null,
-      titleNumber: null,
-      assistedBy: 'Jean',
-      clientContact: '+63 967 890 1234',
-      clientEmail: 'juan.delacruz@email.com'
-    },
-  ];
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deedToDelete, setDeedToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Get current user from auth context
+  const { userData } = useAuth();
+  const staffName = userData?.name || userData?.displayName || 'Staff';
+  
+  // Fetch deeds from Firebase
+  const { deeds: deedOfSales, loading, error } = useDeedOfSales();
+  const { stats, loading: statsLoading } = useStaffDeedStats(staffName);
 
   const filteredDeeds = deedOfSales.filter(deed => {
-    const matchesSearch = deed.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         deed.lot.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         deed.deedNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = deed.client?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         deed.lot?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         deed.deedNumber?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || deed.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -159,10 +60,63 @@ export function StaffDeedOfSales() {
     }
   };
 
-  const myCompletedDeeds = deedOfSales.filter(d => d.assistedBy === 'Jean' && d.status === 'completed').length;
-  const myPendingDeeds = deedOfSales.filter(d => d.assistedBy === 'Jean' && (d.status === 'pending-notarization' || d.status === 'pending-documents')).length;
-  const myTotalValue = deedOfSales.filter(d => d.assistedBy === 'Jean').reduce((sum, deed) => sum + deed.purchasePrice, 0);
-  const thisMonthDeeds = deedOfSales.filter(d => d.assistedBy === 'Jean' && d.saleDate.startsWith('2024-12')).length;
+  // Delete handlers
+  const handleDeleteDeed = (deed: any) => {
+    setDeedToDelete(deed);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deedToDelete) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      await deleteDoc(doc(db, 'deedOfSales', deedToDelete.id));
+      
+      toast.success('Deed of Sale deleted successfully', {
+        description: `Deed ${deedToDelete.deedNumber} has been removed.`
+      });
+      
+      setDeleteDialogOpen(false);
+      setDeedToDelete(null);
+    } catch (error) {
+      console.error('Error deleting deed:', error);
+      toast.error('Failed to delete deed', {
+        description: 'An error occurred while deleting the deed. Please try again.'
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Loading state
+  if (loading || statsLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <div className="text-lg">Loading deed of sales...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="text-lg text-destructive mb-4">
+            Error loading deeds: {error}
+          </div>
+          <Button onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -181,7 +135,7 @@ export function StaffDeedOfSales() {
               <CheckCircle className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm text-muted-foreground">My Completed Deeds</p>
-                <p className="text-xl font-bold text-green-600">{myCompletedDeeds}</p>
+                <p className="text-xl font-bold text-green-600">{stats.myCompletedDeeds}</p>
               </div>
             </div>
           </CardContent>
@@ -192,7 +146,7 @@ export function StaffDeedOfSales() {
               <Clock className="h-5 w-5 text-yellow-600" />
               <div>
                 <p className="text-sm text-muted-foreground">Pending Process</p>
-                <p className="text-xl font-bold text-yellow-600">{myPendingDeeds}</p>
+                <p className="text-xl font-bold text-yellow-600">{stats.myPendingDeeds}</p>
               </div>
             </div>
           </CardContent>
@@ -203,7 +157,7 @@ export function StaffDeedOfSales() {
               <FileText className="h-5 w-5 text-blue-600" />
               <div>
                 <p className="text-sm text-muted-foreground">My Total Value</p>
-                <p className="text-xl font-bold text-blue-600">₱{myTotalValue.toLocaleString()}</p>
+                <p className="text-xl font-bold text-blue-600">₱{stats.myTotalValue.toLocaleString()}</p>
               </div>
             </div>
           </CardContent>
@@ -214,7 +168,7 @@ export function StaffDeedOfSales() {
               <Calendar className="h-5 w-5 text-purple-600" />
               <div>
                 <p className="text-sm text-muted-foreground">This Month</p>
-                <p className="text-xl font-bold text-purple-600">{thisMonthDeeds}</p>
+                <p className="text-xl font-bold text-purple-600">{stats.thisMonthDeeds}</p>
               </div>
             </div>
           </CardContent>
@@ -223,7 +177,7 @@ export function StaffDeedOfSales() {
 
       <Tabs defaultValue="all-deeds" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="all-deeds">All Deeds</TabsTrigger>
+          <TabsTrigger value="all-deeds">All Deeds ({deedOfSales.length})</TabsTrigger>
           <TabsTrigger value="my-deeds">My Assisted Deeds</TabsTrigger>
           <TabsTrigger value="pending">Pending Actions</TabsTrigger>
         </TabsList>
@@ -271,107 +225,128 @@ export function StaffDeedOfSales() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDeeds.map((deed) => (
-                      <TableRow key={deed.id}>
-                        <TableCell className="font-medium">{deed.deedNumber}</TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{deed.client}</p>
-                            <p className="text-sm text-muted-foreground">{deed.clientContact}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{deed.lot}</p>
-                            <p className="text-sm text-muted-foreground">{deed.lotSize}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>₱{deed.purchasePrice.toLocaleString()}</TableCell>
-                        <TableCell>{deed.saleDate}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(deed.status)}>
-                            {deed.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Deed of Sale Details - {deed.deedNumber}</DialogTitle>
-                                <DialogDescription>Complete deed information and transfer details</DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Client</p>
-                                    <p className="font-medium">{deed.client}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Contact</p>
-                                    <p className="font-medium">{deed.clientContact}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Email</p>
-                                    <p className="font-medium">{deed.clientEmail}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Lot</p>
-                                    <p className="font-medium">{deed.lot} ({deed.lotSize})</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Purchase Price</p>
-                                    <p className="font-medium">₱{deed.purchasePrice.toLocaleString()}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Sale Date</p>
-                                    <p className="font-medium">{deed.saleDate}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Transfer Date</p>
-                                    <p className="font-medium">{deed.transferDate || 'Pending'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Assisted By</p>
-                                    <p className="font-medium">{deed.assistedBy}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Witness 1</p>
-                                    <p className="font-medium">{deed.witness1 || 'Not assigned'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Witness 2</p>
-                                    <p className="font-medium">{deed.witness2 || 'Not assigned'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Notarized By</p>
-                                    <p className="font-medium">{deed.notarizedBy || 'Pending'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Registration Number</p>
-                                    <p className="font-medium">{deed.registrationNumber || 'Pending'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Title Number</p>
-                                    <p className="font-medium">{deed.titleNumber || 'Pending'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Status</p>
-                                    <Badge className={getStatusColor(deed.status)}>
-                                      {deed.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
+                    {filteredDeeds.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          {deedOfSales.length === 0 
+                            ? 'No deeds of sale found in the system' 
+                            : 'No deeds match your search criteria'}
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      filteredDeeds.map((deed) => (
+                        <TableRow key={deed.id}>
+                          <TableCell className="font-medium">{deed.deedNumber}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{deed.client || 'N/A'}</p>
+                              <p className="text-sm text-muted-foreground">{deed.clientContact || 'No contact'}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{deed.lot || 'N/A'}</p>
+                              <p className="text-sm text-muted-foreground">{deed.lotSize || 'N/A'}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>₱{(deed.purchasePrice || 0).toLocaleString()}</TableCell>
+                          <TableCell>{deed.saleDate || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(deed.status || 'draft')}>
+                              {(deed.status || 'draft').replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle>Deed of Sale Details - {deed.deedNumber}</DialogTitle>
+                                    <DialogDescription>Complete deed information and transfer details</DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Client</p>
+                                        <p className="font-medium">{deed.client || 'N/A'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Contact</p>
+                                        <p className="font-medium">{deed.clientContact || 'N/A'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Email</p>
+                                        <p className="font-medium">{deed.clientEmail || 'N/A'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Lot</p>
+                                        <p className="font-medium">{deed.lot} ({deed.lotSize})</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Purchase Price</p>
+                                        <p className="font-medium">₱{(deed.purchasePrice || 0).toLocaleString()}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Sale Date</p>
+                                        <p className="font-medium">{deed.saleDate || 'N/A'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Transfer Date</p>
+                                        <p className="font-medium">{deed.transferDate || 'Pending'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Assisted By</p>
+                                        <p className="font-medium">{deed.assistedBy || 'Unassigned'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Witness 1</p>
+                                        <p className="font-medium">{deed.witness1 || 'Not assigned'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Witness 2</p>
+                                        <p className="font-medium">{deed.witness2 || 'Not assigned'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Notarized By</p>
+                                        <p className="font-medium">{deed.notarizedBy || 'Pending'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Registration Number</p>
+                                        <p className="font-medium">{deed.registrationNumber || 'Pending'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Title Number</p>
+                                        <p className="font-medium">{deed.titleNumber || 'Pending'}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">Status</p>
+                                        <Badge className={getStatusColor(deed.status || 'draft')}>
+                                          {(deed.status || 'draft').replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                              
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleDeleteDeed(deed)}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -388,7 +363,7 @@ export function StaffDeedOfSales() {
             <CardContent>
               <div className="space-y-4">
                 {deedOfSales
-                  .filter(deed => deed.assistedBy === 'Jean')
+                  .filter(deed => deed.assistedBy === staffName)
                   .map((deed) => {
                     const StatusIcon = getStatusIcon(deed.status);
                     return (
@@ -463,6 +438,12 @@ export function StaffDeedOfSales() {
                       </Card>
                     );
                   })}
+                
+                {deedOfSales.filter(deed => deed.assistedBy === staffName).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No deeds assigned to you yet
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -501,13 +482,37 @@ export function StaffDeedOfSales() {
                           </div>
 
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
-                              <Eye className="h-4 w-4 mr-1" />
-                              View Details
-                            </Button>
-                            <Button variant="outline" size="sm">
-                              Contact Client
-                            </Button>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View Details
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl">
+                                <DialogHeader>
+                                  <DialogTitle>Deed Details - {deed.deedNumber}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Client</p>
+                                      <p className="font-medium">{deed.client}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Contact</p>
+                                      <p className="font-medium">{deed.clientContact}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Status</p>
+                                      <Badge className={getStatusColor(deed.status)}>
+                                        {deed.status.replace('-', ' ')}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                           </div>
                         </CardContent>
                       </Card>
@@ -525,6 +530,66 @@ export function StaffDeedOfSales() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Deed of Sale</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this deed? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {deedToDelete && (
+            <div className="py-4 space-y-2">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Deed Number:</span>
+                <span className="text-sm font-medium">{deedToDelete.deedNumber}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Client:</span>
+                <span className="text-sm font-medium">{deedToDelete.client}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Lot:</span>
+                <span className="text-sm font-medium">{deedToDelete.lot}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <Badge className={getStatusColor(deedToDelete.status)}>
+                  {deedToDelete.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDeleting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <span className="mr-2">Deleting...</span>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Deed
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

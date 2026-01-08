@@ -271,15 +271,12 @@ const loadSettings = async () => {
       toast.error('Failed to initiate backup');
     }
   };
-
-  // Filter and paginate activity logs
-  const filteredLogs = activityLogs.filter(log => {
-    const matchesSearch = log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.details.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
-
+const filteredLogs = activityLogs.filter(log => {
+  const matchesSearch = (log.user || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       (log.action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       (log.details || '').toLowerCase().includes(searchTerm.toLowerCase());
+  return matchesSearch;
+});
   const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
   const startIndex = (currentPage - 1) * logsPerPage;
   const paginatedLogs = filteredLogs.slice(startIndex, startIndex + logsPerPage);
@@ -310,8 +307,12 @@ const loadSettings = async () => {
     }
   };
 
-  const formatTimestamp = (timestamp: Timestamp) => {
-    return timestamp.toDate().toLocaleString('en-US', {
+  const formatTimestamp = (timestamp: Timestamp | any) => {
+  if (!timestamp) return 'N/A';
+  
+  try {
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleString('en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -320,8 +321,10 @@ const loadSettings = async () => {
       second: '2-digit',
       hour12: false
     });
-  };
-
+  } catch (error) {
+    return 'Invalid date';
+  }
+};
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -852,11 +855,11 @@ const loadSettings = async () => {
                           <TableCell className="text-sm text-muted-foreground">
                             {formatTimestamp(log.timestamp)}
                           </TableCell>
-                          <TableCell>
-                            <Badge className={getActionColor(log.type)}>
-                              {log.type.charAt(0).toUpperCase() + log.type.slice(1)}
-                            </Badge>
-                          </TableCell>
+                        <TableCell>
+  <Badge className={getActionColor(log.type || 'system')}>
+    {log.type ? (log.type.charAt(0).toUpperCase() + log.type.slice(1)) : 'System'}
+  </Badge>
+</TableCell>
                         </TableRow>
                       ))
                     )}

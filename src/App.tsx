@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
 import { StaffDashboard } from './components/StaffDashboard';
-
-// ✅ Import Firebase Auth
-import { auth, db } from './firebase';
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, collection, setDoc, Timestamp, getDoc } from 'firebase/firestore';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { doc, collection, setDoc, Timestamp } from 'firebase/firestore';
+import { db } from './firebase';
 
 // ✅ User type
 export interface User {
@@ -17,95 +15,50 @@ export interface User {
   avatar?: string;
 }
 
-// ✅ Create a simple Auth Context
-interface AuthContextType {
-  currentUser: any;
-  userRole: string | null;
-  userData: any;
+// Main App Component
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
 }
 
-export const AuthContext = React.createContext<AuthContextType>({
-  currentUser: null,
-  userRole: null,
-  userData: null
-});
+// App Content Component (uses useAuth hook)
+function AppContent() {
+  const { currentUser, userRole, loading, login, logout } = useAuth();
 
-export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  // ✅ Listen for auth state changes
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-      
-      if (user) {
-        // Fetch user role from Firestore
-        try {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          
-          let role: 'admin' | 'staff' = 'staff';
-          
-          if (userDoc.exists()) {
-            role = userDoc.data().role || 'staff';
-          } else if (user.email === 'elumirshereeanne@gmail.com') {
-            role = 'admin';
-          }
-          
-          setCurrentUser({
-            id: user.uid,
-            name: user.displayName || user.email?.split('@')[0] || 'User',
-            email: user.email || '',
-            role,
-          });
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-        }
-      } else {
-        setCurrentUser(null);
-      }
-      
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // 🔹 Handle Login using Firebase Authentication
+  // Handle Login
   const handleLogin = async (email: string, password: string) => {
-    setLoading(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      await login(email, password);
 
       // ✅ LOG THE LOGIN EVENT
-      try {
-        await setDoc(doc(collection(db, 'users', user.uid, 'security_logs')), {
-          eventType: 'user_login',
-          timestamp: Timestamp.now(),
-          ipAddress: 'N/A',
-          userAgent: navigator.userAgent,
-        });
-        console.log('✅ Login event logged successfully');
-      } catch (logError) {
-        console.error('❌ Could not log login event:', logError);
+      if (currentUser) {
+        try {
+          await setDoc(doc(collection(db, 'users', currentUser.uid, 'security_logs')), {
+            eventType: 'user_login',
+            timestamp: Timestamp.now(),
+            ipAddress: 'N/A',
+            userAgent: navigator.userAgent,
+          });
+          console.log('✅ Login event logged successfully');
+        } catch (logError) {
+          console.error('❌ Could not log login event:', logError);
+        }
       }
 
-      // User will be set by onAuthStateChanged
       alert('Login successful!');
     } catch (error: any) {
       console.error('Login failed:', error);
       alert(`Login failed: ${error.message}`);
-      setLoading(false);
     }
   };
 
-  // 🔹 Handle Logout
+  // Handle Logout
   const handleLogout = async () => {
     try {
-      const userId = auth.currentUser?.uid;
+      const userId = currentUser?.uid;
 
       // ✅ LOG THE LOGOUT EVENT BEFORE SIGNING OUT
       if (userId) {
@@ -122,8 +75,7 @@ export default function App() {
         }
       }
 
-      await signOut(auth);
-      setCurrentUser(null);
+      await logout();
       alert('Logged out successfully.');
     } catch (error: any) {
       console.error('Logout failed:', error);
@@ -131,14 +83,7 @@ export default function App() {
     }
   };
 
-  // 🔹 Auth Context Value
-  const authContextValue: AuthContextType = {
-    currentUser: firebaseUser,
-    userRole: currentUser?.role || null,
-    userData: currentUser
-  };
-
-  // 🔹 Conditional Rendering
+  // Loading State
   if (loading) {
     return (
       <div style={{ 
@@ -153,18 +98,23 @@ export default function App() {
     );
   }
 
+  // Not Logged In
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  // ✅ Provide Auth Context to all components
-  return (
-    <AuthContext.Provider value={authContextValue}>
-      {currentUser.role === 'admin' ? (
-        <AdminDashboard user={currentUser} onLogout={handleLogout} />
-      ) : (
-        <StaffDashboard user={currentUser} onLogout={handleLogout} />
-      )}
-    </AuthContext.Provider>
+  // Convert to User type for dashboards
+  const user: User = {
+    id: currentUser.uid,
+    name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
+    email: currentUser.email || '',
+    role: (userRole as 'admin' | 'staff') || 'staff',
+  };
+
+  // Render appropriate dashboard
+  return userRole === 'admin' ? (
+    <AdminDashboard user={user} onLogout={handleLogout} />
+  ) : (
+    <StaffDashboard user={user} onLogout={handleLogout} />
   );
 }

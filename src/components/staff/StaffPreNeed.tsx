@@ -13,8 +13,7 @@ import { db } from '../../firebase';
 import { toast } from 'sonner';
 
 // Import Firebase hooks
-import { usePreNeedContracts, usePackageTypes, useStaffStats } from '../../hooks/useFirestore';
-import { useAuth } from '../../hooks/useAuth';
+import { usePreNeedContracts, usePackageTypes, useStaffStats } from '../../hooks/useFirestore';import { useAuth } from '../../hooks/useAuth';
 
 export function StaffPreNeed() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -362,7 +361,33 @@ export function StaffPreNeed() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>{plan.nextPaymentDue ? formatDate(plan.nextPaymentDue) : 'Completed'}</TableCell>
+<TableCell>
+  {(() => {
+    // If contract is completed, show "Fully Paid"
+    if (plan.status === 'completed') {
+      return <div className="text-sm text-muted-foreground">Fully Paid</div>;
+    }
+    
+    // If nextPaymentDue exists, use it
+    if (plan.nextPaymentDue) {
+      return <div className="text-sm">{formatDate(plan.nextPaymentDue)}</div>;
+    }
+    
+    // Calculate next payment date based on start date and paid months
+    if (plan.startDate && plan.paidMonths !== undefined) {
+      try {
+        const startDate = plan.startDate.toDate ? plan.startDate.toDate() : new Date(plan.startDate);
+        const nextPaymentDate = new Date(startDate);
+        nextPaymentDate.setMonth(nextPaymentDate.getMonth() + (plan.paidMonths + 1));
+        return <div className="text-sm">{formatDate(nextPaymentDate)}</div>;
+      } catch (error) {
+        return <div className="text-sm text-muted-foreground">No due date</div>;
+      }
+    }
+    
+    return <div className="text-sm text-muted-foreground">No due date</div>;
+  })()}
+</TableCell>
                           <TableCell>
                             <Badge className={getStatusColor(plan.status || 'active')}>
                               {(plan.status || 'active').charAt(0).toUpperCase() + (plan.status || 'active').slice(1)}

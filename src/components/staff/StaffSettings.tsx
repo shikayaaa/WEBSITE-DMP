@@ -279,7 +279,7 @@ const handleSave = async () => {
     }
   };
   const paymentGateways = [
-    { key: 'acceptCash', label: 'Cash Payments', description: 'Accept cash payments at the office' },
+    { key: 'acceptCash', label: 'Maya', description: 'Mobile wallet payments via Maya' },
     { key: 'acceptBankTransfer', label: 'Bank Transfer', description: 'Direct bank transfers and deposits' },
     { key: 'gcashEnabled', label: 'GCash', description: 'Mobile wallet payments via GCash' },
   ];

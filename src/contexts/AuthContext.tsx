@@ -1,16 +1,39 @@
-// src/contexts/AuthContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// src/contexts/AuthContext.tsx
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword,
   signOut,
-  createUserWithEmailAndPassword 
+  createUserWithEmailAndPassword,
+  User
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
+// Types
+interface UserData {
+  email: string;
+  role: string;
+  createdAt: string;
+  [key: string]: any;
+}
+
+interface AuthContextType {
+  currentUser: User | null;
+  userRole: string | null;
+  userData: UserData | null;
+  loading: boolean;
+  signup: (email: string, password: string, additionalData?: Partial<UserData>) => Promise<any>;
+  login: (email: string, password: string) => Promise<any>;
+  logout: () => Promise<void>;
+  isAdmin: () => boolean;
+  isStaff: () => boolean;
+  isAdminOrStaff: () => boolean;
+  fetchUserData: (uid: string) => Promise<UserData | null>;
+}
+
 // Create Auth Context
-const AuthContext = createContext();
+const AuthContext = createContext<AuthContextType | null>(null);
 
 // Hook to use Auth Context
 export function useAuth() {
@@ -22,20 +45,20 @@ export function useAuth() {
 }
 
 // Auth Provider Component
-export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [userData, setUserData] = useState(null);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch user data from Firestore
-  const fetchUserData = async (uid) => {
+  const fetchUserData = async (uid: string): Promise<UserData | null> => {
     try {
       const userDocRef = doc(db, 'users', uid);
       const userDoc = await getDoc(userDocRef);
       
       if (userDoc.exists()) {
-        const data = userDoc.data();
+        const data = userDoc.data() as UserData;
         setUserData(data);
         setUserRole(data.role);
         return data;
@@ -45,7 +68,7 @@ export function AuthProvider({ children }) {
         const staffDoc = await getDoc(staffDocRef);
         
         if (staffDoc.exists()) {
-          const data = staffDoc.data();
+          const data = staffDoc.data() as UserData;
           setUserData(data);
           setUserRole('staff');
           return data;
@@ -56,7 +79,7 @@ export function AuthProvider({ children }) {
         const adminDoc = await getDoc(adminDocRef);
         
         if (adminDoc.exists()) {
-          const data = adminDoc.data();
+          const data = adminDoc.data() as UserData;
           setUserData(data);
           setUserRole('admin');
           return data;
@@ -71,7 +94,7 @@ export function AuthProvider({ children }) {
   };
 
   // Sign Up function
-  const signup = async (email, password, additionalData = {}) => {
+  const signup = async (email: string, password: string, additionalData: Partial<UserData> = {}) => {
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       const user = result.user;
@@ -91,7 +114,7 @@ export function AuthProvider({ children }) {
   };
 
   // Login function
-  const login = async (email, password) => {
+  const login = async (email: string, password: string) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       return result;
@@ -113,17 +136,17 @@ export function AuthProvider({ children }) {
   };
 
   // Check if user is admin
-  const isAdmin = () => {
+  const isAdmin = (): boolean => {
     return userRole === 'admin';
   };
 
   // Check if user is staff
-  const isStaff = () => {
+  const isStaff = (): boolean => {
     return userRole === 'staff';
   };
 
   // Check if user is admin or staff
-  const isAdminOrStaff = () => {
+  const isAdminOrStaff = (): boolean => {
     return userRole === 'admin' || userRole === 'staff';
   };
 
@@ -147,7 +170,7 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  const value = {
+  const value: AuthContextType = {
     currentUser,
     userRole,
     userData,

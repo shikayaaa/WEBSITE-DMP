@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '../ui/dialog';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -46,86 +46,100 @@ export function StaffInterments() {
   const { userData } = useAuth();
   const currentStaffName = userData?.displayName || userData?.name || 'Unknown Staff';
 
-  useEffect(() => {
-    fetchInterments();
-  }, []);
 
-  const fetchInterments = async () => {
+useEffect(() => {
+  const fetchInterments = () => {
     setLoading(true);
     setError(null);
 
     try {
-      console.log('🔍 [STAFF] Loading interments...');
+      console.log('🔍 [STAFF] Loading interments with real-time updates...');
       
-      // Fetch from interment_requests collection
+      // Fetch from interment_requests collection with real-time updates
       const intermentsRef = collection(db, 'interment_requests');
       const q = query(intermentsRef, orderBy('preferredDate', 'asc'));
-      const intermentsSnapshot = await getDocs(q);
       
-      console.log('📋 [STAFF] Total interments found:', intermentsSnapshot.size);
-      
-      const intermentsList: Interment[] = [];
-      
-      for (const intermentDoc of intermentsSnapshot.docs) {
-        const data = intermentDoc.data();
+      // Use onSnapshot for real-time updates
+      const unsubscribe = onSnapshot(q, (intermentsSnapshot) => {
+        console.log('📋 [STAFF] Total interments found:', intermentsSnapshot.size);
         
-        // Parse date from MM/DD/YYYY format
-        let formattedDate = data.preferredDate || 'N/A';
-        if (data.preferredDate && typeof data.preferredDate === 'string') {
-          const dateParts = data.preferredDate.split('/');
-          if (dateParts.length === 3) {
-            formattedDate = `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
+        const intermentsList: Interment[] = [];
+        
+        intermentsSnapshot.forEach((intermentDoc) => {
+          const data = intermentDoc.data();
+          
+          // Parse date from MM/DD/YYYY format
+          let formattedDate = data.preferredDate || 'N/A';
+          if (data.preferredDate && typeof data.preferredDate === 'string') {
+            const dateParts = data.preferredDate.split('/');
+            if (dateParts.length === 3) {
+              formattedDate = `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
+            }
           }
-        }
-        
-        // Determine status based on Firebase status field
-        let status: IntermentStatus = 'scheduled';
-        if (data.status) {
-          const statusLower = data.status.toLowerCase();
-          if (statusLower === 'approved') status = 'scheduled';
-          else if (statusLower === 'in-progress' || statusLower === 'in progress') status = 'in-progress';
-          else if (statusLower === 'completed') status = 'completed';
-          else if (statusLower === 'cancelled' || statusLower === 'rejected') status = 'cancelled';
-        }
-        
-        // Calculate progress based on status
-        let progress = 0;
-        if (status === 'in-progress') progress = 50;
-        if (status === 'completed') progress = 100;
-        
-        intermentsList.push({
-          id: intermentDoc.id,
-          client: data.clientName || data.fullName || 'Unknown',
-          clientId: data.userId || undefined,
-          deceased: data.deceasedName || 'Unknown',
-          date: formattedDate,
-          time: data.preferredTime || '10:00 AM',
-          lot: `Section ${data.section || 'N/A'} - Block ${data.block || 'N/A'}, Lot ${data.lotNumber || 'N/A'}`,
-          lotId: data.lotId || undefined,
-          status,
-          contact: data.contactNumber || data.phoneNumber || 'N/A',
-          email: data.email || undefined,
-          notes: data.specialRequests || data.notes || '',
-          assignedStaff: data.assignedStaff || 'Unassigned',
-          assignedStaffId: data.assignedStaffId || undefined,
-          services: data.services || ['Burial Service'],
-          progress,
-          createdAt: data.createdAt?.toDate() || undefined,
-          updatedAt: data.updatedAt?.toDate() || undefined,
+          
+          // Determine status based on Firebase status field
+          let status: IntermentStatus = 'scheduled';
+          if (data.status) {
+            const statusLower = data.status.toLowerCase();
+            if (statusLower === 'approved') status = 'scheduled';
+            else if (statusLower === 'in-progress' || statusLower === 'in progress') status = 'in-progress';
+            else if (statusLower === 'completed') status = 'completed';
+            else if (statusLower === 'cancelled' || statusLower === 'rejected') status = 'cancelled';
+          }
+          
+          // Calculate progress based on status
+          let progress = 0;
+          if (status === 'in-progress') progress = 50;
+          if (status === 'completed') progress = 100;
+          
+          intermentsList.push({
+            id: intermentDoc.id,
+            client: data.clientName || data.fullName || 'Unknown',
+            clientId: data.userId || undefined,
+            deceased: data.deceasedName || 'Unknown',
+            date: formattedDate,
+            time: data.preferredTime || '10:00 AM',
+            lot: `Section ${data.section || 'N/A'} - Block ${data.block || 'N/A'}, Lot ${data.lotNumber || 'N/A'}`,
+            lotId: data.lotId || undefined,
+            status,
+            contact: data.contactNumber || data.phoneNumber || 'N/A',
+            email: data.email || undefined,
+            notes: data.specialRequests || data.notes || '',
+            assignedStaff: data.assignedStaff || 'Unassigned',
+            assignedStaffId: data.assignedStaffId || undefined,
+            services: data.services || ['Burial Service'],
+            progress,
+            createdAt: data.createdAt?.toDate() || undefined,
+            updatedAt: data.updatedAt?.toDate() || undefined,
+          });
         });
-      }
-      
-      // Sort by date
-      intermentsList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      
-      setInterments(intermentsList);
-      setLoading(false);
+        
+        // Sort by date
+        intermentsList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        setInterments(intermentsList);
+        setLoading(false);
+      }, (error) => {
+        console.error('Error fetching interments:', error);
+        setError(error.message);
+        setLoading(false);
+      });
+
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching interments:', error);
+      console.error('Error setting up interments listener:', error);
       setError(error instanceof Error ? error.message : 'Failed to load interments');
       setLoading(false);
     }
   };
+
+  const unsubscribe = fetchInterments();
+  return () => {
+    if (unsubscribe) unsubscribe();
+  };
+}, []);
+      
+
 
   const filteredInterments = interments.filter(interment => 
     statusFilter === 'all' || interment.status === statusFilter
@@ -145,6 +159,11 @@ export function StaffInterments() {
     try {
       console.log(`Updating interment ${id} status to ${newStatus}`);
       
+      const interment = interments.find(i => i.id === id);
+      if (!interment) {
+        throw new Error('Interment not found');
+      }
+      
       const intermentRef = doc(db, 'interment_requests', id);
       
       // Map our internal status to Firebase status
@@ -156,8 +175,35 @@ export function StaffInterments() {
         updatedAt: new Date(),
       });
       
+      // Create notification for client when marking as complete
+      if (newStatus === 'completed' && interment.clientId) {
+        try {
+          const notificationsRef = collection(db, 'notifications');
+          await addDoc(notificationsRef, {
+            userId: interment.clientId,
+            type: 'interment_completed',
+            title: 'Interment Service Completed',
+            message: `The interment service for ${interment.deceased} has been completed successfully.`,
+            intermentId: id,
+            deceasedName: interment.deceased,
+            serviceDate: interment.date,
+            serviceTime: interment.time,
+            location: interment.lot,
+            read: false,
+            createdAt: serverTimestamp(),
+          });
+          
+          console.log('✅ Notification created for client:', interment.clientId);
+        } catch (notifError) {
+          console.error('⚠️ Failed to create notification:', notifError);
+          // Don't fail the whole operation if notification fails
+        }
+      }
+      
       toast.success('Status updated successfully', {
-        description: `Interment status changed to ${newStatus}`,
+        description: newStatus === 'completed' 
+          ? `Interment completed and client has been notified`
+          : `Interment status changed to ${newStatus}`,
       });
       
       // Update local state
@@ -225,11 +271,11 @@ export function StaffInterments() {
         description: errorMessage,
         duration: 5000,
       });
-      
+    } finally {
       setIsDeleting(false);
     }
   };
-
+  
   const todayInterments = interments.filter(i => {
     const today = new Date().toISOString().split('T')[0];
     return i.date === today;
@@ -257,7 +303,7 @@ export function StaffInterments() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <p className="text-sm text-destructive mb-4">Error loading interments: {error}</p>
-          <Button onClick={fetchInterments}>
+          <Button onClick={() => window.location.reload()}>
             Retry
           </Button>
         </div>
@@ -421,7 +467,7 @@ export function StaffInterments() {
                               <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
                                   <User className="h-4 w-4 mr-1" />
-                                  Contact Client
+                                  Client Information
                                 </Button>
                               </DialogTrigger>
                               <DialogContent className="max-w-2xl">
@@ -473,10 +519,7 @@ export function StaffInterments() {
                                         {interment.status.charAt(0).toUpperCase() + interment.status.slice(1).replace('-', ' ')}
                                       </Badge>
                                     </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">Assigned Staff</p>
-                                      <p className="font-medium">{interment.assignedStaff}</p>
-                                    </div>
+                                
                                   </div>
 
                                   <div>
@@ -500,7 +543,7 @@ export function StaffInterments() {
                                   <div className="flex justify-center pt-4 border-t">
                                     <Button variant="outline">
                                       <Mail className="h-4 w-4 mr-2" />
-                                      Send Message
+                                     Done
                                     </Button>
                                   </div>
                                 </div>

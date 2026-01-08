@@ -1,88 +1,185 @@
-import React, { useState } from 'react';
-import { Bell, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, CheckCircle, Clock, AlertTriangle, X, FileText, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Separator } from '../ui/separator';
+import { db } from '../../firebase';
+import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, deleteDoc, limit } from 'firebase/firestore';
+import { useAuth } from '../../hooks/useAuth';
+import { toast } from 'sonner';
 
 interface Notification {
   id: string;
-  type: 'payment_due' | 'payment_overdue' | 'payment_completed' | 'contract_created';
+  type: 'payment_due' | 'payment_overdue' | 'payment_completed' | 'contract_created' | 'interment_completed';
   title: string;
   message: string;
-  date: string;
+  date?: string;
+  createdAt?: any;
   read: boolean;
-  priority: 'high' | 'medium' | 'low';
+  priority?: 'high' | 'medium' | 'low';
+  userId?: string;
+  // Interment-specific fields
+  intermentId?: string;
+  deceasedName?: string;
+  serviceDate?: string;
+  serviceTime?: string;
+  location?: string;
 }
 
 export function NotificationsPanel() {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      type: 'payment_overdue',
-      title: 'Overdue Payment',
-      message: 'Maria Santos - Lot A-002 payment is 5 days overdue',
-      date: '2024-12-20',
-      read: false,
-      priority: 'high'
-    },
-    {
-      id: '2',
-      type: 'payment_due',
-      title: 'Payment Due Soon',
-      message: 'Juan Cruz - Lot A-003 payment due in 3 days',
-      date: '2024-12-18',
-      read: false,
-      priority: 'medium'
-    },
-    {
-      id: '3',
-      type: 'payment_completed',
-      title: 'Payment Received',
-      message: 'Pedro Garcia completed monthly payment for Lot B-002',
-      date: '2024-12-17',
-      read: true,
-      priority: 'low'
-    },
-    {
-      id: '4',
-      type: 'contract_created',
-      title: 'New Contract',
-      message: 'Contract CON-006 created for Ana Lopez - Lot C-001',
-      date: '2024-12-16',
-      read: true,
-      priority: 'medium'
-    },
-    {
-      id: '5',
-      type: 'payment_due',
-      title: 'Payment Reminder',
-      message: 'Carlos Rivera - Lot C-005 payment due in 7 days',
-      date: '2024-12-15',
-      read: false,
-      priority: 'medium'
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { currentUser, userData } = useAuth();
+
+  useEffect(() => {
+    // Use currentUser?.uid or userData?.uid depending on your auth implementation
+    const userId = currentUser?.uid || userData?.uid;
+    
+    if (!userId) {
+      setLoading(false);
+      return;
     }
-  ]);
+
+    console.log('🔔 [NOTIFICATIONS] Setting up real-time listener for user:', userId);
+
+    try {
+      // Query notifications for the current user
+      const notificationsRef = collection(db, 'notifications');
+      const q = query(
+        notificationsRef,
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc'),
+        limit(50) // Limit to last 50 notifications
+      );
+
+      // Real-time listener
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        console.log('📬 [NOTIFICATIONS] Received', snapshot.size, 'notifications');
+        
+        const notificationsList: Notification[] = [];
+        
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          
+          // Format date
+          let formattedDate = 'Just now';
+          if (data.createdAt?.toDate) {
+            const date = data.createdAt.toDate();
+            formattedDate = new Intl.DateTimeFormat('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit'
+            }).format(date);
+          } else if (data.date) {
+            formattedDate = data.date;
+          }
+
+          // Determine priority based on type
+          let priority: 'high' | 'medium' | 'low' = 'medium';
+          if (data.type === 'payment_overdue') priority = 'high';
+          else if (data.type === 'payment_completed' || data.type === 'interment_completed') priority = 'low';
+          
+          notificationsList.push({
+            id: doc.id,
+            type: data.type || 'contract_created',
+            title: data.title || 'Notification',
+            message: data.message || '',
+            date: formattedDate,
+            createdAt: data.createdAt,
+            read: data.read || false,
+            priority: data.priority || priority,
+            userId: data.userId,
+            // Interment fields
+            intermentId: data.intermentId,
+            deceasedName: data.deceasedName,
+            serviceDate: data.serviceDate,
+            serviceTime: data.serviceTime,
+            location: data.location,
+          });
+        });
+        
+        setNotifications(notificationsList);
+        setLoading(false);
+      }, (error) => {
+        console.error('❌ [NOTIFICATIONS] Error:', error);
+        toast.error('Failed to load notifications');
+        setLoading(false);
+      });
+
+      return () => {
+        console.log('🔕 [NOTIFICATIONS] Cleaning up listener');
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error('❌ [NOTIFICATIONS] Setup error:', error);
+      setLoading(false);
+    }
+  }, [currentUser?.uid, userData?.uid]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      const notificationRef = doc(db, 'notifications', id);
+      await updateDoc(notificationRef, {
+        read: true,
+      });
+      
+      // Update local state immediately for better UX
+      setNotifications(prev =>
+        prev.map(notif =>
+          notif.id === id ? { ...notif, read: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      toast.error('Failed to update notification');
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notif => ({ ...notif, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      const unreadNotifications = notifications.filter(n => !n.read);
+      
+      // Update all unread notifications
+      const updatePromises = unreadNotifications.map(notif => {
+        const notificationRef = doc(db, 'notifications', notif.id);
+        return updateDoc(notificationRef, { read: true });
+      });
+      
+      await Promise.all(updatePromises);
+      
+      // Update local state
+      setNotifications(prev =>
+        prev.map(notif => ({ ...notif, read: true }))
+      );
+      
+      toast.success('All notifications marked as read');
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      toast.error('Failed to update notifications');
+    }
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notif => notif.id !== id));
+  const deleteNotification = async (id: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    
+    try {
+      const notificationRef = doc(db, 'notifications', id);
+      await deleteDoc(notificationRef);
+      
+      // Remove from local state immediately
+      setNotifications(prev => prev.filter(notif => notif.id !== id));
+      
+      toast.success('Notification deleted');
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      toast.error('Failed to delete notification');
+    }
   };
 
   const getNotificationIcon = (type: string) => {
@@ -94,7 +191,9 @@ export function NotificationsPanel() {
       case 'payment_completed':
         return <CheckCircle className="h-4 w-4 text-green-600" />;
       case 'contract_created':
-        return <CheckCircle className="h-4 w-4 text-blue-600" />;
+        return <FileText className="h-4 w-4 text-blue-600" />;
+      case 'interment_completed':
+        return <Calendar className="h-4 w-4 text-purple-600" />;
       default:
         return <Bell className="h-4 w-4" />;
     }
@@ -156,7 +255,12 @@ export function NotificationsPanel() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="max-h-96 overflow-y-auto">
-              {notifications.length === 0 ? (
+              {loading ? (
+                <div className="p-6 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">Loading notifications...</p>
+                </div>
+              ) : notifications.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground">
                   <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No notifications</p>
@@ -167,7 +271,7 @@ export function NotificationsPanel() {
                     <div key={notification.id}>
                       <div
                         className={`p-4 hover:bg-muted/10 cursor-pointer transition-colors ${
-                          getNotificationBg(notification.priority, notification.read)
+                          getNotificationBg(notification.priority || 'medium', notification.read)
                         }`}
                         onClick={() => !notification.read && markAsRead(notification.id)}
                       >
@@ -178,12 +282,25 @@ export function NotificationsPanel() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
-                                <p className={`font-medium text-sm ${getPriorityColor(notification.priority, notification.read)}`}>
+                                <p className={`font-medium text-sm ${getPriorityColor(notification.priority || 'medium', notification.read)}`}>
                                   {notification.title}
                                 </p>
                                 <p className="text-sm text-muted-foreground mt-1">
                                   {notification.message}
                                 </p>
+                                
+                                {/* Additional details for interment notifications */}
+                                {notification.type === 'interment_completed' && notification.serviceDate && (
+                                  <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                                    {notification.serviceDate && (
+                                      <p>📅 Service Date: {notification.serviceDate} at {notification.serviceTime}</p>
+                                    )}
+                                    {notification.location && (
+                                      <p>📍 Location: {notification.location}</p>
+                                    )}
+                                  </div>
+                                )}
+                                
                                 <p className="text-xs text-muted-foreground mt-2">
                                   {notification.date}
                                 </p>
@@ -195,10 +312,7 @@ export function NotificationsPanel() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteNotification(notification.id);
-                                  }}
+                                  onClick={(e) => deleteNotification(notification.id, e)}
                                   className="h-6 w-6 p-0 opacity-50 hover:opacity-100"
                                 >
                                   <X className="h-3 w-3" />
@@ -217,13 +331,13 @@ export function NotificationsPanel() {
               )}
             </div>
             
-            {notifications.length > 0 && (
+            {notifications.length > 0 && !loading && (
               <>
                 <Separator />
                 <div className="p-3">
-                  <Button variant="ghost" size="sm" className="w-full text-sm">
-                    View all notifications
-                  </Button>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Showing latest {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
+                  </p>
                 </div>
               </>
             )}

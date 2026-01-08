@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Eye, Edit, Download, FileText, Stamp, Calendar, CheckCircle, User, MapPin } from 'lucide-react';
-import { Button } from '../ui/button';
+import { Plus, Search, Eye, Edit, Download, FileText, Stamp, Calendar, CheckCircle, User, MapPin, Trash2 } from 'lucide-react';import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -15,8 +14,7 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, onSnapshot, getDoc } from 'firebase/firestore';
-import { db, auth } from '../../firebase';
+import { collection, addDoc, getDocs, doc, updateDoc, query, orderBy, Timestamp, onSnapshot, getDoc, deleteDoc } from 'firebase/firestore';import { db, auth } from '../../firebase';
 import html2canvas from 'html2canvas';
 
 export function DeedOfSales() {
@@ -80,109 +78,111 @@ export function DeedOfSales() {
 <p style="text-align: right;">Until _____</p>
 <p><br></p>
 <p>Doc No. _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Page No. _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Book No. _____ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Series 20 _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp</p>`,
-    'PRE-NEED PURCHASE AGREEMENT': `<p style="text-align: right;">CONTRACT NO. _____</p>
+'PRE-NEED PURCHASE AGREEMENT': `<p style="text-align: right;">CONTRACT NO. _____</p>
 <p style="text-align: center;"><strong>DUMAGUETE MEMORIAL PARK</strong></p>
 <p style="text-align: center;"><em>"A Perpetual Care Cemetery"</em></p>
 <p style="text-align: center;"><strong>PRE-NEED PURCHASE AGREEMENT</strong></p>
-<p><br></p>
-<p>THIS AGREEMENT made on _____ as SELLER and _____________________ 20_____ between DUMAGUETE MEMORIAL PARK _____________________ the PURCHASER.</p>
-<p><br></p>
+<p>THIS AGREEMENT made on _____________________ 20_____ between DUMAGUETE MEMORIAL PARK as SELLER and _____________________ the PURCHASER.</p>
 <p style="text-align: center;"><strong>WITNESSETH:</strong></p>
-<p><br></p>
 <p>That the PURCHASER agrees to purchase and SELLER agrees to sell to PURCHASER for interment purposes only that certain property situated within the cemetery of Seller at San Jose Extension, Dumaguete City, Philippines, and more particularly described in the maps and lot books on file in the office of the Seller as follows:</p>
-<p><br></p>
-<p>Lot _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Block _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Section _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Lot Price P _____</p>
-<p>Lot _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Block _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Section _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, Lot Price P _____</p>
-<p style="text-align: right;">TOTAL LOT PRICE _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P _____</p>
-<p style="text-align: right;">PERPETUAL CARE _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P _____</p>
-<p style="text-align: right;">TOTAL LIST PRICE _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;P _____</p>
-<p><br></p>
-<p>Purchaser agrees to pay to Seller in Philippine Currency P _____ as purchase price for the aforesaid property and P _____ as his contribution to the Perpetual Care Fund, the sum total of both amounts to be paid by Purchaser as follows: to wit P _____ (___%) upon execution of this contract, P _____ (___%) as down payment and the balance or the amount of P _____ is payable in equal first to twelfth (___) monthly installments every _____ day of each and every month, commencing on _____, 20_____ including interest charges on the declining balance thereof totalling twelve per cent (12%) per annum, on the _____ day of each and every month, commencing on _____ 20_____ until the entire balance has been paid. All unpaid installments shall bear interest at the rate of fourteen per cent (14%) per annum on the unpaid balance, from the date of default to Perpetual Care Fund.</p>
-<p><br></p>
-<p>Time is of the essence in this agreement and it is agreed that should any of the amounts herein remain unperformed by the PURCHASER for a period of sixty (60) days after the same shall become due, this agreement shall become null and void and all payments made prior to such re-entry shall belong to the SELLER as liquidated damages and PURCHASER hereby consents to vacate peacefully the aforesaid interment space if a breach of this contract should occur. In any event, the estate of PURCHASER shall remain bound to make payments to the SELLER for any payment which had become due and payable prior to the date of death of the PURCHASER.</p>
-<p><br></p>
+<p>Lot _____, Block _____, Section _____, Lot Price P _____</p>
+<p>Lot _____, Block _____, Section _____, Lot Price P _____</p>
+<p style="text-align: right;">TOTAL LOT PRICE P _____</p>
+<p style="text-align: right;">PERPETUAL CARE P _____</p>
+<p style="text-align: right;">TOTAL LIST PRICE P _____</p>
+<p>Purchaser agrees to pay to Seller in Philippine Currency P _____ as purchase price for the aforesaid property and P _____ as his contribution to the Perpetual Care Fund, the sum total of both amounts to be paid by Purchaser as follows: to wit P _____ (___%) upon signing of this agreement by Purchaser and the remainder of P _____ (___%) as down payment and the balance or the amount of P _____ is payable in equal first to twelfth (___) monthly installments every _____ day of each and every month, commencing on _____, 20_____ including interest charges on the declining balance thereof totalling twelve per cent (12%) per annum, on the _____ day of each and every month, commencing on _____ 20_____ until the entire balance has been paid. All unpaid installments shall be applied first to interest, next to the purchase price and then to the Perpetual Care Fund.</p>
+<p>Time is of the essence in this agreement and it is agreed that should any of the amounts herein remain unperformed by the PURCHASER for a period of sixty (60) days after the same shall become due, or should any of the covenants or agreements herein and in the payments made prior to such re-entry shall belong to the SELLER as liquidated damages and PURCHASER hereby consents to vacate peacefully the aforesaid interment space if a breach of this contract should occur. In any event, the estate of PURCHASER shall remain bound to make payments to the SELLER for any payment which had become due and payable prior to the date of death of the PURCHASER.</p>
 <p>It is agreed that if for any reason the above described interment space is not satisfactory to the PURCHASER and provided no interment has been made therein by the PURCHASER or persons approved and authorized by the PURCHASER, the said interment space may be exchanged for another space in DUMAGUETE MEMORIAL PARK. Exchange credit will be given for the amount already paid on principal and perpetual care. Interment will be subject to the terms and conditions set forth herein and subject to the rules and regulations of Seller, a copy of which may be examined at the office of Seller.</p>
-<p><br></p>
-<p>The PURCHASER shall not sell, transfer, or assign any interest in Purchaser, Seller will convey and deliver to Purchaser by DEED OF SALE the aforesaid property for interment of human remains only. The DEED OF SALE is subject to all such rules and regulations governing the cemetery of Seller. A copy of said rules and regulations and all amendments, additions and modifications is on file in Seller's office, is subject to inspection and copies are available on request. Such rules and regulations are hereby incorporated herein and made integral parts of this contract only the markers not in excess of 15" x 24" or otherwise agrees that the PURCHASER may sell, transfer, or assign this interment property at any time, subject to the rules and regulations of the Seller, and if sold, PURCHASER agrees to reimburse the SELLER for services rendered. The SELLER will not resell this property to the PURCHASER.</p>
-<p><br></p>
-<p>It is agreed that the cemetery of Seller is operated as a perpetual care cemetery which means that a Perpetual Care Fund in the form of an irrevocable trust has been established and that Seller will invest in such trust (or any other trust which Seller may create for the perpetual care of said cemetery) a Seller covenants with Purchaser that the deposit by Purchaser in said fund (Perpetual Care Fund) in the amount of P _____ (or any other trust which Seller may create for the perpetual care of said cemetery) is a trust fund, the net income from which is to be used for the perpetual care of the cemetery of Seller. As used herein, the term "Perpetual Care" means the cutting of grass on the plots and grounds, walks, roadways, boundaries and structures, to the end that said grounds shall remain and be reasonably cared for as a cemetery ground forever.</p>
-<p><br></p>
+<p>The PURCHASER shall not sell, transfer, or assign any interest in the above described property without the written consent of the Seller. Upon completion of all payments, including accrued interest by Purchaser, Seller will convey and deliver to Purchaser by DEED OF SALE the aforesaid property for interment of human remains only. The DEED OF SALE shall be subject to all such rules and regulations governing the cemetery of Seller, a copy of said rules and regulations and all amendments, additions and modifications is on file in Seller's office, is subject to inspection by Purchaser at all times during normal office hours and is specifically referred to and incorporated herein as if set forth herein in full. It is distinctly understood that the SELLER has the irrevocable power to revise or cancel any existing trust and substitute it with another, or establish any trust on such terms and conditions and with such trustee or trustees as the SELLER may determine. The PURCHASER agrees that he/she/they may sell, transfer, or assign this interment property at any time, subject to the rules and regulations of the Seller, and if sold, PURCHASER agrees to reimburse the SELLER for services rendered. The SELLER will not resell this property to the PURCHASER.</p>
+<p>It is agreed that the cemetery of Seller is operated as a perpetual care cemetery which means that a Perpetual Care Fund in the form of an irrevocable trust has been established and that Seller will invest in such trust (or any other trust which Seller may create for the perpetual care of said cemetery) a portion of the purchase price paid by Purchaser. Seller covenants with Purchaser that the deposit by Purchaser in said fund (Perpetual Care Fund) in the amount of P _____ is a trust fund, the net income from which is to be used for the perpetual care of the cemetery of Seller. As used herein, the term "Perpetual Care" means the cutting of grass on the plots and grounds, walks, roadways, boundaries and structures, to the end that said grounds shall remain and be reasonably cared for as a cemetery ground forever.</p>
 <p>PURCHASER agrees that he has read this contract as evidenced by his signature herein, that there are no verbal terms, conditions, warranties or representations other than those contained herein. THIS CONTRACT IS NOT VALID UNTIL ACCEPTED BY THE SELLER and SELLER is authorized to issue Deed of Sale as follows:</p>
-<p><br></p>
 <p>Name: _____________________</p>
+<p>The terms and conditions hereof shall extend to and be binding upon the heirs, executors, administrators, successors and assigns of the respective parties. As used herein, the singular includes the plural and the masculine includes the feminine. The obligation and liabilities of PURCHASERS hereunder are joint and several.</p>
+<p>Counselor _____</p>
+<p style="text-align: right;">Purchaser _____</p>
+<p>ACCEPTED ON _____, 20_____</p>
+<p>Res. Cert. A _____ at _____</p>
+<p>By: _____</p>
+<p>Home Address: _____</p>
+<p>Business Address: _____</p>
+<p>Telephone: Home _____ Bus. _____</p>
+<p>Map Clerk _____ Official Receipt No. _____</p>`,
+'SERVICE INVOICE': `<div style="display: flex; justify-content: space-between; align-items: flex-start;">
+  <div style="flex: 1;">
+    <p><em>DUMAGUETE MEMORIAL PARK</em></p>
+    <p>San Jose Ext. Bogo Taclobo 6200 City of Dumaguete</p>
+    <p>Negros Oriental Philippines</p>
+    <p><strong>GABRIEL D. AMIGO</strong> - Prop.</p>
+    <p>VAT Reg. TIN # 171-188-791-00000</p>
+  </div>
+  <div style="text-align: right; border: 2px solid black; padding: 8px 16px;">
+    <p style="margin: 0;"><strong>SERVICE</strong></p>
+    <p style="margin: 0;"><strong>INVOICE</strong></p>
+    <p style="margin-top: 8px;">Inv. <strong>N<sup>o</sup></strong> <span style="color: red;">_____</span></p>
+    <p>DATE _____ 20___</p>
+  </div>
+</div>
 <p><br></p>
-<p>_____________________</p>
+<table style="width: 100%; border-collapse: collapse; border: 1px solid black;">
+  <tr style="border-bottom: 1px solid black;">
+    <td style="padding: 4px; border-right: 1px solid black;">CUSTOMER NAME: _____________________________________________________</td>
+    <td rowspan="2" style="padding: 4px; vertical-align: top; width: 35%;">
+      <p style="margin: 0;"><strong>Total Sales (VAT-Inclusive)</strong></p>
+      <p style="margin: 0;"><strong>Less: VAT</strong></p>
+      <p style="margin: 0;"><strong>Amount: Net of VAT</strong></p>
+      <p style="margin: 0;"><strong>Less: Discount</strong></p>
+      <p style="margin: 0;"><strong>SC/PWD/NAAC/MOV/SP</strong></p>
+    </td>
+  </tr>
+  <tr style="border-bottom: 1px solid black;">
+    <td style="padding: 4px; border-right: 1px solid black;">Address: _____________________________________________ TIN: _________</td>
+  </tr>
+  <tr style="background-color: #f0f0f0; border-bottom: 1px solid black;">
+    <td style="padding: 4px; border-right: 1px solid black;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <th style="text-align: left; width: 50%;"><strong>Item Description / Nature of Service</strong></th>
+          <th style="text-align: center; width: 15%;"><strong>Quantity</strong></th>
+          <th style="text-align: center; width: 15%;"><strong>Unit Price</strong></th>
+          <th style="text-align: right; width: 20%;"><strong>Amount</strong></th>
+        </tr>
+      </table>
+    </td>
+    <td rowspan="7" style="padding: 4px; vertical-align: top;">
+      <p style="margin: 0;"><strong>Add: VAT</strong></p>
+      <p style="margin: 0;"><strong>Less: Withholding Tax</strong></p>
+      <p style="margin: 0;"><strong>TOTAL AMOUNT DUE</strong></p>
+      <p style="margin-top: 12px;"><strong>VATtable Sales</strong></p>
+      <p style="margin: 0;"><strong>VAT</strong></p>
+      <p style="margin: 0;"><strong>Zero-Rated Sales</strong></p>
+      <p style="margin: 0;"><strong>VAT-Exempt Sales</strong></p>
+    </td>
+  </tr>
+  <tr><td style="padding: 8px; border-right: 1px solid black; border-bottom: 1px solid black;">_________________________________________________________________</td></tr>
+  <tr><td style="padding: 8px; border-right: 1px solid black; border-bottom: 1px solid black;">_________________________________________________________________</td></tr>
+  <tr><td style="padding: 8px; border-right: 1px solid black; border-bottom: 1px solid black;">_________________________________________________________________</td></tr>
+  <tr><td style="padding: 8px; border-right: 1px solid black; border-bottom: 1px solid black;">_________________________________________________________________</td></tr>
+  <tr><td style="padding: 8px; border-right: 1px solid black; border-bottom: 1px solid black;">_________________________________________________________________</td></tr>
+  <tr style="border-bottom: 1px solid black;">
+    <td style="padding: 8px; text-align: right; border-right: 1px solid black;"><strong>TOTAL</strong> _____________</td>
+  </tr>
+  <tr>
+    <td style="padding: 4px; border-right: 1px solid black;">
+      <p>( ) Cash</p>
+      <p>( ) Check</p>
+      <p>( ) Bank transfer</p>
+    </td>
+    <td style="padding: 4px; vertical-align: bottom; text-align: right;">
+      <p><strong>CASHIER / AUTHORIZED PERSON</strong></p>
+    </td>
+  </tr>
+</table>
 <p><br></p>
-<p>_____________________</p>
-<p><br></p>
-<p>The terms and conditions hereof shall extend to and be binding upon the heirs, executors, administrators, successors and assigns of the respective parties. A caveat herein, the singular includes the plural and the masculine includes the feminine. The obligation and liabilities of PURCHASERS hereunder are joint and several.</p>
-<p><br></p>
-<p>Counselor _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Purchaser</p>
-<p><br></p>
-<p>ACCEPTED ON _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, 20_____ Res. Cert. A _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at _____</p>
-<p><br></p>
-<p>By: _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Home Address: _____</p>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Business Address: _____</p>
-<p>Map Clerk _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Official Receipt No. _____&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Telephone: Home _____ Bus. _____</p>
-<p><br></p>
-<p>_____________________</p>`,
-    'SERVICE INVOICE': `<p><em>DUMAGUETE MEMORIAL PARK</em></p>
-<p>San Jose Ext. Bogo Taclobo 6200 City of Dumaguete</p>
-<p>Negros Oriental Philippines</p>
-<p><strong>GABRIEL D. AMIGO</strong> - Prop.</p>
-<p>VAT Reg. TIN # 171-188-791-00000</p>
-<p><br></p>
-<p style="text-align: right;"><strong>SERVICE</strong></p>
-<p style="text-align: right;"><strong>INVOICE</strong></p>
-<p><br></p>
-<p style="text-align: right;">Inv. <strong>N<sup>o</sup></strong> _____</p>
-<p style="text-align: right;">DATE _____</p>
-<p><br></p>
-<p>CUSTOMER NAME: _____________________________________________________________________________________</p>
-<p>Address: _______________________________________________________________ TIN: _____________________</p>
-<p><br></p>
-<p><strong>Item Description / Nature of Service&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Quantity&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Unit Price&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Amount</strong></p>
-<p>_____________________________________________________________________________________________________________________________________________________</p>
-<p><br></p>
-<p>_____________________________________________________________________________________________________________________________________________________</p>
-<p><br></p>
-<p>_____________________________________________________________________________________________________________________________________________________</p>
-<p><br></p>
-<p>_____________________________________________________________________________________________________________________________________________________</p>
-<p><br></p>
-<p>_____________________________________________________________________________________________________________________________________________________</p>
-<p><br></p>
-<p>_____________________________________________________________________________________________________________________________________________________</p>
-<p><br></p>
-<p style="text-align: right;"><strong>TOTAL</strong> _____________________</p>
-<p><br></p>
-<p style="text-align: right;"><strong>Total Sales (VAT-Inclusive)</strong> _____</p>
-<p style="text-align: right;"><strong>Less: VAT</strong> _____</p>
-<p style="text-align: right;"><strong>Amount: Net of VAT</strong> _____</p>
-<p style="text-align: right;"><strong>Less: Discount</strong> _____</p>
-<p style="text-align: right;"><strong>SC/PWD/NAAC/MOV/SP</strong> _____</p>
-<p style="text-align: right;"><strong>Add: VAT</strong> _____</p>
-<p style="text-align: right;"><strong>Less: Withholding Tax</strong> _____</p>
-<p style="text-align: right;"><strong>TOTAL AMOUNT DUE</strong> _____</p>
-<p><br></p>
-<p style="text-align: right;"><strong>Vatable Sales</strong> _____</p>
-<p style="text-align: right;"><strong>VAT</strong> _____</p>
-<p style="text-align: right;"><strong>Zero-Rated Sales</strong> _____</p>
-<p style="text-align: right;"><strong>VAT-Exempt Sales</strong> _____</p>
-<p><br></p>
-<p>( ) Cash</p>
-<p>( ) Check</p>
-<p>( ) Bank transfer</p>
-<p><br></p>
-<p><br></p>
-<p>50 bks (50x2) 0001-2500</p>
-<p><strong>NOEL J. CABALLES</strong> - Prop.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S-PNNMAAUACACV1</p>
-<p>BIR Authority to Print No. 073AU20250000006223&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Solo Parent ID No.</p>
-<p>Date of ATP: 8-16-2025&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<strong>N.J CABALLES PRINTING PRESS</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SC/PWD/NAAC/MOV/</p>
-<p>225-079/9622-2332 / TIN 116-582-751-000-VAT&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SP Signature</p>
-<p>Accreditation No. 079MIP21230900090001 Date Issued: 02-20-2023 Expiry Date: 02-19-2026</p>
-<p><br></p>
-<p style="text-align: right;"><strong>CASHIER / AUTHORIZED PERSON</strong></p>`
+<p style="font-size: 8px; margin: 0;">50 bks (50x2) 0001-2500</p>
+<p style="font-size: 8px; margin: 0;">BIR Authority to Print No. 073AU20250000006223 <strong>NOEL J. CABALLES</strong> - Prop. SC/PWD/NAAC/MOV/</p>
+<p style="font-size: 8px; margin: 0;">Date of ATP: 8-16-2025 <strong>N.J CABALLES PRINTING PRESS</strong> S/N Parent ID No.</p>
+<p style="font-size: 8px; margin: 0;">Accreditation No. 079MIP21230900090001 Date Issued: 02-20-2023 Expiry Date: 02-19-2026 Lower Balinguel Dumaguete City SC/PWD/NAAC/MOV/</p>
+<p style="font-size: 8px; margin: 0;">225-079/9622-2332 / TIN 116-582-751-000-VAT Signatures</p>`
   });
 
   // Mock data
@@ -303,14 +303,25 @@ useEffect(() => {
     return matchesSearch && matchesStatus;
   });
 
-  const stats = {
-    totalDeeds: deeds.length,
-    completed: deeds.filter(d => d.status === 'completed').length,
-    pending: deeds.filter(d => d.status === 'pending').length,
-    totalValue: '₱673,500'
-  };
-
-
+const stats = {
+  totalDeeds: deeds.length,
+  completed: deeds.filter(d => d.status === 'completed').length,
+  pending: deeds.filter(d => d.status === 'pending').length,
+  totalValue: (() => {
+    const total = deeds.reduce((sum, deed) => {
+      // Safely parse amount, handling both string and number formats
+      let amount = 0;
+      if (typeof deed.amount === 'string') {
+        amount = parseFloat(deed.amount.replace(/[₱,\s]/g, '')) || 0;
+      } else if (typeof deed.amount === 'number') {
+        amount = deed.amount;
+      }
+      return sum + amount;
+    }, 0);
+    // Format with peso sign and commas
+    return `₱${total.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  })()
+};
 // ADD THIS LOADING CHECK HERE ↓
 if (loading) {
   return (
@@ -389,41 +400,68 @@ const handleCreateDeed = async () => {
     setViewDialogOpen(true);
   };
 
-  const handleEditDeed = (deed: any) => {
-    setSelectedDeed(deed);
-    setEditDialogOpen(true);
-  };
-
- const handleSaveEdit = async () => {
+ const handleEditDeed = (deed: any) => {
+  setSelectedDeed(deed);
+  // Pre-populate the form with current deed data
+  setFormData({
+    clientName: deed.clientName,
+    lotNumber: deed.lotNumber,
+    block: deed.block,
+    amount: deed.amount,
+    template: deed.template || '',
+    notes: deed.notes || ''
+  });
+  setEditDialogOpen(true);
+};
+const handleSaveEdit = async () => {
   try {
     if (!selectedDeed?.docId) {
       toast.error('Invalid deed selected');
       return;
     }
 
+    // Validate required fields
+    if (!formData.clientName || !formData.lotNumber || !formData.block || !formData.amount) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     const deedRef = doc(db, 'deedOfSales', selectedDeed.docId);
     
     await updateDoc(deedRef, {
-      clientName: formData.clientName || selectedDeed.clientName,
-      lotNumber: formData.lotNumber || selectedDeed.lotNumber,
-      block: formData.block || selectedDeed.block,
-      amount: formData.amount || selectedDeed.amount,
-      notes: formData.notes || selectedDeed.notes,
+      clientName: formData.clientName,
+      lotNumber: formData.lotNumber,
+      block: formData.block,
+      amount: formData.amount,
+      notes: formData.notes,
       updatedAt: Timestamp.now(),
     });
 
     toast.success('Deed updated successfully', {
-      description: 'All changes have been saved'
+      description: 'All changes have been saved to database'
+    });
+
+    // Reset form data
+    setFormData({
+      clientName: '',
+      lotNumber: '',
+      block: '',
+      amount: '',
+      template: '',
+      notes: ''
     });
 
     setEditDialogOpen(false);
+    setSelectedDeed(null);
   } catch (error) {
     console.error('Error updating deed:', error);
-    toast.error('Failed to update deed');
+    toast.error('Failed to update deed', {
+      description: 'Please try again or contact support'
+    });
   }
 };
 
- const handleNotarize = async (deed: any) => {
+const handleNotarize = async (deed: any) => {
   try {
     const deedRef = doc(db, 'deedOfSales', deed.docId);
     
@@ -440,6 +478,31 @@ const handleCreateDeed = async () => {
     toast.error('Failed to update deed status');
   }
 };
+
+// ADD YOUR DELETE FUNCTION HERE ↓↓↓
+const handleDeleteDeed = async (deed: any) => {
+  try {
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete deed ${deed.id}?\n\nClient: ${deed.clientName}\nLot: ${deed.lotNumber}\n\nThis action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+
+    const deedRef = doc(db, 'deedOfSales', deed.docId);
+    await deleteDoc(deedRef);
+
+    toast.success('Deed deleted successfully', {
+      description: `${deed.id} has been permanently removed`
+    });
+  } catch (error) {
+    console.error('Error deleting deed:', error);
+    toast.error('Failed to delete deed', {
+      description: 'Please try again or contact support'
+    });
+  }
+};
+// ADD YOUR DELETE FUNCTION HERE ↑↑↑
 
   const handleEditTemplate = (templateName: string) => {
     setSelectedTemplate(templateName);
@@ -627,6 +690,7 @@ const handleCreateDeed = async () => {
           <h2 className="text-2xl font-bold">Deed of Sale</h2>
           <p className="text-muted-foreground">Manage property transfer documents and templates</p>
         </div>
+        
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -832,21 +896,29 @@ const handleCreateDeed = async () => {
                           {deed.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleViewDeed(deed)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditDeed(deed)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {deed.status === 'pending' && (
-                            <Button variant="ghost" size="sm" onClick={() => handleNotarize(deed)}>
-                              <Stamp className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
+                  <TableCell>
+  <div className="flex items-center gap-2">
+    <Button variant="ghost" size="sm" onClick={() => handleViewDeed(deed)}>
+      <Eye className="h-4 w-4" />
+    </Button>
+    <Button variant="ghost" size="sm" onClick={() => handleEditDeed(deed)}>
+      <Edit className="h-4 w-4" />
+    </Button>
+    {deed.status === 'pending' && (
+      <Button variant="ghost" size="sm" onClick={() => handleNotarize(deed)}>
+        <Stamp className="h-4 w-4" />
+      </Button>
+    )}
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      onClick={() => handleDeleteDeed(deed)}
+      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
+  </div>
+</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -926,37 +998,47 @@ const handleCreateDeed = async () => {
         </TabsContent>
       </Tabs>
 
-      {/* View Dialog */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Deed of Sale Details</DialogTitle>
-            <DialogDescription>Complete information for {selectedDeed?.id}</DialogDescription>
-          </DialogHeader>
-          {selectedDeed && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg border-b pb-2">Basic Information</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-muted-foreground">Deed ID</Label>
-                      <p className="font-medium">{selectedDeed.id}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Client Name</Label>
-                      <p className="font-medium">{selectedDeed.clientName}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Sale Date</Label>
-                      <p className="font-medium">{selectedDeed.saleDate}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">Amount</Label>
-                      <p className="font-medium text-lg">{selectedDeed.amount}</p>
-                    </div>
-                  </div>
+    {/* View Dialog */}
+<Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+  <DialogContent className="max-w-3xl">
+    <DialogHeader>
+      <DialogTitle>Deed of Sale Details</DialogTitle>
+      <DialogDescription>Complete information for {selectedDeed?.id}</DialogDescription>
+    </DialogHeader>
+    {selectedDeed && (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-6">
+          {/* ✅ UPDATED SECTION STARTS HERE */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg border-b pb-2">Basic Information</h3>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-muted-foreground">Deed ID</Label>
+                <p className="font-medium">{selectedDeed.id}</p>
+              </div>
+              {selectedDeed.contractId && (
+                <div>
+                  <Label className="text-muted-foreground">Pre-Need Contract</Label>
+                  <Badge variant="outline" className="font-mono">
+                    {selectedDeed.contractId}
+                  </Badge>
                 </div>
+              )}
+              <div>
+                <Label className="text-muted-foreground">Client Name</Label>
+                <p className="font-medium">{selectedDeed.clientName}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">Sale Date</Label>
+                <p className="font-medium">{selectedDeed.saleDate}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground">Amount</Label>
+                <p className="font-medium text-lg">{selectedDeed.amount}</p>
+              </div>
+            </div>
+          </div>
+          {/* ✅ UPDATED SECTION ENDS HERE */}
                 <div className="space-y-4">
                   <h3 className="font-semibold text-lg border-b pb-2">Property Details</h3>
                   <div className="space-y-3">
@@ -1025,62 +1107,60 @@ const handleCreateDeed = async () => {
           </DialogHeader>
           {selectedDeed && (
             <div className="space-y-6">
-              <div className="space-y-4">
-                <h4 className="font-medium">Basic Information</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-client">Client Name</Label>
-                    <Input id="edit-client" defaultValue={selectedDeed.clientName} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-lot">Lot Number</Label>
-                    <Input id="edit-lot" defaultValue={selectedDeed.lotNumber} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-block">Block/Section</Label>
-                    <Input id="edit-block" defaultValue={selectedDeed.block} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-amount">Amount</Label>
-                    <Input id="edit-amount" defaultValue={selectedDeed.amount} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-date">Sale Date</Label>
-                  <Input id="edit-date" type="date" defaultValue={selectedDeed.saleDate} />
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <h4 className="font-medium">Legal Information</h4>
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-notary">Notarized By</Label>
-                    <Input id="edit-notary" defaultValue={selectedDeed.notarizedBy || ''} placeholder="Enter notary name" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-registration">Registration Number</Label>
-                      <Input id="edit-registration" defaultValue={selectedDeed.registrationNumber || ''} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-title">Title Number</Label>
-                      <Input id="edit-title" defaultValue={selectedDeed.titleNumber || ''} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-notes">Notes</Label>
-                <Textarea id="edit-notes" defaultValue={selectedDeed.notes} rows={3} />
-              </div>
+   <div className="space-y-4">
+  <h4 className="font-medium">Basic Information</h4>
+  <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-2">
+      <Label htmlFor="edit-client">Client Name *</Label>
+      <Input 
+        id="edit-client" 
+        value={formData.clientName}
+        onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+        placeholder="Enter client name"
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="edit-lot">Lot Number *</Label>
+      <Input 
+        id="edit-lot" 
+        value={formData.lotNumber}
+        onChange={(e) => setFormData({...formData, lotNumber: e.target.value})}
+        placeholder="e.g., A-125"
+      />
+    </div>
+  </div>
+  <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-2">
+      <Label htmlFor="edit-block">Block/Section *</Label>
+      <Input 
+        id="edit-block" 
+        value={formData.block}
+        onChange={(e) => setFormData({...formData, block: e.target.value})}
+        placeholder="e.g., Section A"
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="edit-amount">Amount *</Label>
+      <Input 
+        id="edit-amount" 
+        value={formData.amount}
+        onChange={(e) => setFormData({...formData, amount: e.target.value})}
+        placeholder="₱"
+      />
+    </div>
+  </div>
+</div>
+<Separator />
+<div className="space-y-2">
+  <Label htmlFor="edit-notes">Notes</Label>
+  <Textarea 
+    id="edit-notes" 
+    value={formData.notes}
+    onChange={(e) => setFormData({...formData, notes: e.target.value})}
+    rows={3}
+    placeholder="Additional notes..."
+  />
+</div>
             </div>
           )}
           <DialogFooter>

@@ -67,24 +67,54 @@ export function StaffPayments() {
             role: userData.role
           });
           
-          // Get payment summary for this user
-          const paymentSummaryDoc = await getDoc(
-            doc(db, 'users', userId, 'payments', 'summary')
-          );
-          
-          console.log(`💰 [STAFF] Payment summary exists for ${userId}:`, paymentSummaryDoc.exists());
-          
-          if (paymentSummaryDoc.exists()) {
-            const paymentData = paymentSummaryDoc.data();
-            console.log(`💵 [STAFF] Payment data for ${userId}:`, paymentData);
-            
-            // Determine status
-            let status: PaymentStatus = 'pending';
-            if (paymentData.remainingBalance === 0) {
-              status = 'paid';
-            } else if (paymentData.totalPaid > 0) {
-              status = 'partial';
-            }
+         // Get payment summary for this user
+const paymentSummaryDoc = await getDoc(
+  doc(db, 'users', userId, 'payments', 'summary')
+);
+
+console.log(`💰 [STAFF] Payment summary exists for ${userId}:`, paymentSummaryDoc.exists());
+
+if (paymentSummaryDoc.exists()) {
+  const paymentData = paymentSummaryDoc.data();
+  console.log(`💵 [STAFF] Payment data for ${userId}:`, paymentData);
+  
+  // Get the lot details to calculate correct amount based on price list
+  let totalAmount = paymentData.totalAmount || 0;
+  let downPayment = paymentData.downPayment || 0;
+  let monthlyPayment = paymentData.monthlyPayment || 0;
+  
+  // If we have lotId, fetch the lot details to get the correct price
+  if (paymentData.lotId) {
+    try {
+      const lotDoc = await getDoc(doc(db, 'lots', paymentData.lotId));
+      if (lotDoc.exists()) {
+        const lotData = lotDoc.data();
+        totalAmount = lotData.price || totalAmount;
+        
+        // Calculate down payment (20% of total)
+        downPayment = totalAmount * 0.20;
+        
+        // Calculate monthly payment based on payment term
+        const paymentTerm = paymentData.paymentTerm || 12; // default 12 months
+        const remainingAfterDown = totalAmount - downPayment;
+        monthlyPayment = remainingAfterDown / paymentTerm;
+      }
+    } catch (error) {
+      console.error('Error fetching lot details:', error);
+    }
+  }
+  
+  // Calculate actual paid amount and remaining balance
+  const totalPaid = paymentData.totalPaid || downPayment; // At least down payment
+  const remainingBalance = totalAmount - totalPaid;
+  
+  // Determine status
+  let status: PaymentStatus = 'pending';
+  if (remainingBalance <= 0) {
+    status = 'paid';
+  } else if (totalPaid > 0) {
+    status = 'partial';
+  }
             
             // Check if overdue
             if (paymentData.nextDueDate) {
@@ -99,16 +129,16 @@ export function StaffPayments() {
             const paymentId = paymentData.paymentId || `PAY-${String(paymentCounter).padStart(3, '0')}`;
             paymentCounter++;
             
-            paymentsListPromises.push({
-              id: userId,
-              paymentId: paymentId,
-              client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
-              clientId: userId,
-              lot: paymentData.lotNumber || 'N/A',
-              lotId: paymentData.lotId || undefined,
-              amount: paymentData.totalAmount || 0,
-              paid: paymentData.totalPaid || 0,
-              balance: paymentData.remainingBalance || 0,
+           paymentsListPromises.push({
+  id: userId,
+  paymentId: paymentId,
+  client: userData.displayName || userData.fullName || userData.email?.split('@')[0] || 'Unknown',
+  clientId: userId,
+  lot: paymentData.lotNumber || 'N/A',
+  lotId: paymentData.lotId || undefined,
+  amount: totalAmount,
+  paid: totalPaid,
+  balance: remainingBalance,
               dueDate: paymentData.nextDueDate || 'N/A',
               status,
               paymentDate: paymentData.lastPaymentDate || null,
