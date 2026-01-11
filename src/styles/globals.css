@@ -9,7 +9,7 @@
   --gradient-primary: linear-gradient(135deg, #0D47A1 0%, #2196F3 100%);
   --gradient-secondary: linear-gradient(135deg, #2196F3 0%, #64B5F6 100%);
   --gradient-accent: linear-gradient(135deg, #BBDEFB 0%, #E3F2FD 100%);
-  --gradient-sidebar: linear-gradient(180deg, #1976D2 0%, #64B5F6 30%, #E3F2FD 70%, #FFFFFF 100%);
+  --gradient-sidebar: linear-gradient(180deg, #689cd1 0%, #64B5F6 30%, #E3F2FD 70%, #FFFFFF 100%);
   
   /* Solid fallbacks for compatibility */
   --background: #FFFFFF;
@@ -47,7 +47,7 @@
   --radius: 1rem;
   
   /* Sidebar Gradient Colors */
-  --sidebar: linear-gradient(180deg, #1976D2 0%, #64B5F6 30%, #E3F2FD 70%, #FFFFFF 100%);
+  --sidebar: linear-gradient(180deg, #000000 0%, #64B5F6 30%, #E3F2FD 70%, #FFFFFF 100%);
   --sidebar-foreground: #1E1E1E;
   --sidebar-primary: #0D47A1;
   --sidebar-primary-foreground: #ffffff;
